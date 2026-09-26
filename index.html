@@ -382,6 +382,7 @@ main { padding: 18px 24px 80px; min-width: 0; }
     <div class="lb-actions">
       <a class="btn" id="lbDownload" aria-disabled="true">Download</a>
       <a class="btn" id="lbOpen" target="_blank" rel="noopener" aria-disabled="true">Open in OneDrive</a>
+      <a class="btn" id="lbFolder" target="_blank" rel="noopener" aria-disabled="true">Show in folder</a>
     </div>
   </div>
 </div>
@@ -1294,14 +1295,18 @@ async function showLightbox() {
   $('#lbMeta').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
   $('#lbPrev').hidden = LB.i === 0;
   $('#lbNext').hidden = LB.i >= LB.list.length - 1;
-  const dl = $('#lbDownload'), op = $('#lbOpen');
-  for (const a of [dl, op]) { a.removeAttribute('href'); a.setAttribute('aria-disabled', 'true'); }
+  const dl = $('#lbDownload'), op = $('#lbOpen'), fo = $('#lbFolder');
+  for (const a of [dl, op, fo]) { a.removeAttribute('href'); a.setAttribute('aria-disabled', 'true'); }
   if (!DEMO) details(it).then(d => {
     if (seq !== LB.seq) return;
     op.href = d.webUrl;
     dl.href = d['@microsoft.graph.downloadUrl']; dl.download = d.name;
-    for (const a of [dl, op]) a.setAttribute('aria-disabled', 'false');
-  }).catch(e => { op.title = dl.title = 'Not available: ' + e.message; });
+    // The folder holding the file: onedrive.live.com/?id=<folder id>&cid=<drive>, the same form OneDrive itself uses
+    const cid = new URL(d.webUrl).searchParams.get('cid') || (d.parentReference && d.parentReference.driveId);
+    const parent = d.parentReference && d.parentReference.id;
+    if (cid && parent) fo.href = `https://onedrive.live.com/?id=${encodeURIComponent(parent)}&cid=${encodeURIComponent(cid)}`;
+    for (const a of [dl, op, fo]) if (a.href) a.setAttribute('aria-disabled', 'false');
+  }).catch(e => { op.title = dl.title = fo.title = 'Not available: ' + e.message; });
 
   if (DEMO) { msg.hidden = false; msg.textContent = 'Demo mode: sign in to see the real photo.'; img.hidden = true; return; }
 
