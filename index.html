@@ -1,0 +1,1583 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Family Photos</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='3' y='7' width='26' height='19' rx='4' fill='%23c2562b'/><circle cx='16' cy='16.5' r='5.5' fill='%23fff'/><rect x='10' y='4' width='12' height='5' rx='2' fill='%23c2562b'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.30.0/lib/msal-browser.min.js"></script>
+<style>
+:root {
+  --bg: #f6f4f0; --panel: #ffffff; --ink: #1d1b18; --muted: #6b665e; --line: #e4dfd6;
+  --chip: #efebe4; --accent: #b24d24; --accent-soft: #f5e3d9; --accent-ink: #ffffff;
+  --tile-bg: #e8e3da; --shadow: 0 1px 2px rgba(30,20,10,.06), 0 4px 16px rgba(30,20,10,.06);
+  --tile: 180px; --radius: 10px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121110; --panel: #1b1a18; --ink: #eeeae3; --muted: #9d978c; --line: #2d2b27;
+    --chip: #26241f; --accent: #e57f52; --accent-soft: #3a261c; --accent-ink: #1b1a18;
+    --tile-bg: #24221e; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.3);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121110; --panel: #1b1a18; --ink: #eeeae3; --muted: #9d978c; --line: #2d2b27;
+  --chip: #26241f; --accent: #e57f52; --accent-soft: #3a261c; --accent-ink: #1b1a18;
+  --tile-bg: #24221e; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.3);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 Inter, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- full-page screens ---------- */
+.screen { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 32px; max-width: 520px; width: 100%; box-shadow: var(--shadow); }
+.card h1 { font: 600 30px/1.15 Fraunces, Georgia, serif; margin: 0 0 8px; letter-spacing: -.01em; }
+.card p { color: var(--muted); margin: 0 0 16px; }
+.card ol { color: var(--muted); padding-left: 20px; margin: 0 0 16px; }
+.card code { background: var(--chip); padding: 1px 5px; border-radius: 4px; font-size: 12.5px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 8px 16px; font-weight: 500; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; padding: 10px 20px; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn[disabled] { opacity: .45; cursor: default; }
+.field { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); margin-bottom: 12px; }
+.progress { height: 6px; background: var(--chip); border-radius: 99px; overflow: hidden; margin: 16px 0 8px; }
+.progress > i { display: block; height: 100%; width: 30%; background: var(--accent); border-radius: 99px; animation: slide 1.2s ease-in-out infinite; }
+@keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(340%); } }
+.err { color: #c0392b; white-space: pre-wrap; font-size: 13px; }
+
+/* ---------- app shell ---------- */
+header.top { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 12px; padding: 10px 20px; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+.brand { font: 600 20px/1 Fraunces, Georgia, serif; white-space: nowrap; letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; }
+.brand svg { flex: none; }
+.search { flex: 1; max-width: 560px; margin: 0 auto; position: relative; }
+.search input { width: 100%; padding: 9px 14px 9px 36px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); }
+.search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+.who { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 600; font-size: 12px; }
+.iconbtn { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; width: 34px; height: 34px; display: grid; place-items: center; flex: none; color: var(--muted); }
+.iconbtn:hover { color: var(--ink); border-color: var(--muted); }
+.iconbtn.spin svg { animation: rot 1s linear infinite; }
+@keyframes rot { to { transform: rotate(360deg); } }
+
+.layout { display: grid; grid-template-columns: 264px minmax(0, 1fr); align-items: start; }
+aside.filters { position: sticky; top: 55px; height: calc(100vh - 55px); overflow-y: auto; padding: 18px 16px 40px 20px; border-right: 1px solid var(--line); }
+.fgroup { margin-bottom: 22px; }
+.fgroup h3 { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 5px 11px; font-size: 13px; }
+.chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 500; }
+.toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 0; cursor: pointer; font-size: 13.5px; }
+.toggle input { accent-color: var(--accent); width: 16px; height: 16px; }
+.fold { display: flex; justify-content: space-between; gap: 8px; width: 100%; text-align: left; border: 0; background: none; padding: 5px 8px 5px calc(8px + var(--d, 0) * 14px); border-radius: 7px; font-size: 13.5px; }
+.fold span:last-child { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.fold .fn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fold:hover { background: var(--chip); }
+.fold.path { font-weight: 500; }
+.fold.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.fold.on span:last-child { color: var(--accent); }
+.fsep { height: 1px; background: var(--line); margin: 6px 8px; }
+
+main { padding: 18px 24px 80px; min-width: 0; }
+.summary { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 14px; }
+.summary h2 { font: 600 24px/1.2 Fraunces, Georgia, serif; margin: 0; letter-spacing: -.01em; }
+.summary .count { color: var(--muted); }
+.summary .spacer { flex: 1; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--panel); }
+.seg button { border: 0; background: none; padding: 6px 12px; font-size: 13px; color: var(--muted); }
+.seg button.on { background: var(--chip); color: var(--ink); font-weight: 500; }
+.active-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.active-filters .chip { display: inline-flex; gap: 6px; align-items: center; }
+.active-filters .chip b { font-weight: 400; color: var(--muted); }
+.mobile-only { display: none; }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 10px; margin-bottom: 22px; box-shadow: var(--shadow); }
+.panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+.panel-head h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.panel-head small { color: var(--muted); }
+.timeline { display: flex; align-items: flex-end; gap: 4px; height: 118px; overflow-x: auto; padding-bottom: 2px; }
+.bar { flex: 1 0 20px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; border: 0; background: none; padding: 0; gap: 4px; }
+.bar i { display: block; width: 100%; max-width: 34px; min-height: 2px; background: color-mix(in srgb, var(--accent) 45%, var(--tile-bg)); border-radius: 4px 4px 1px 1px; transition: background .15s; }
+.bar span { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.bar:hover i { background: var(--accent); }
+.bar.on i { background: var(--accent); }
+.bar.on span { color: var(--accent); font-weight: 600; }
+.bar.zero { cursor: default; }
+.bar.zero i { background: var(--line); }
+
+.map-panel { padding: 0; overflow: hidden; position: relative; }
+#map { height: 440px; background: var(--tile-bg); }
+.map-bar { position: absolute; z-index: 500; top: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; }
+.map-bar .btn { box-shadow: var(--shadow); font-size: 13px; padding: 6px 14px; }
+.map-note { position: absolute; z-index: 500; left: 10px; bottom: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; font-size: 12px; color: var(--muted); }
+.pin.est { background: var(--panel); border-color: var(--accent); }
+.pin { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+.cluster { display: grid; place-items: center; border-radius: 50%; background: color-mix(in srgb, var(--accent) 85%, transparent); color: #fff; font-weight: 600; font-size: 12px; border: 3px solid rgba(255,255,255,.85); box-shadow: 0 1px 6px rgba(0,0,0,.35); }
+.leaflet-container { font: inherit; }
+/* dark mode: invert the light OpenStreetMap tiles */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.9) contrast(.9); } }
+:root[data-theme="dark"] .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.9) contrast(.9); }
+.cat { display: flex; align-items: center; gap: 8px; padding: 3px 0 3px 8px; font-size: 13.5px; }
+.cat label { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; cursor: pointer; }
+.cat input { accent-color: var(--accent); width: 16px; height: 16px; flex: none; }
+.cat .n { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.cat .only { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 2px 9px; font-size: 12px; color: var(--muted); flex: none; }
+.cat .only:hover:not([disabled]) { color: var(--ink); border-color: var(--muted); }
+.cat .only[disabled] { opacity: .4; cursor: default; }
+.cat .only.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.cat.dim label { opacity: .45; }
+.places-note { font-size: 12px; color: var(--muted); margin: 0 8px 6px; }
+
+.strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; }
+.strip .tile { flex: 0 0 150px; scroll-snap-align: start; }
+.strip .tile .yr { position: absolute; left: 6px; bottom: 6px; background: rgba(0,0,0,.55); color: #fff; font-size: 11.5px; font-weight: 500; padding: 2px 7px; border-radius: 99px; }
+
+.group-h { position: sticky; top: 55px; z-index: 5; margin: 18px 0 8px; padding: 6px 0; background: var(--bg); font-weight: 600; font-size: 15px; display: flex; gap: 10px; align-items: baseline; }
+.group-h small { color: var(--muted); font-weight: 400; font-size: 12.5px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--tile), 1fr)); gap: 4px; }
+.tile { position: relative; aspect-ratio: 1; border: 0; padding: 0; border-radius: 4px; overflow: hidden; background: var(--tile-bg); display: block; width: 100%; }
+.tile img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity .25s, transform .3s; }
+.tile.loaded img { opacity: 1; }
+.tile:hover img { transform: scale(1.03); }
+.tile .badge { position: absolute; right: 6px; top: 6px; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 5px; }
+.tile .ph { position: absolute; inset: 0; display: grid; place-items: center; padding: 8px; font-size: 11px; color: var(--muted); text-align: center; word-break: break-all; }
+.tile.loaded .ph { display: none; }
+.empty { text-align: center; color: var(--muted); padding: 60px 16px; }
+.empty h3 { font: 600 20px Fraunces, Georgia, serif; color: var(--ink); margin: 0 0 6px; }
+#sentinel { height: 1px; }
+
+.banner { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 40; background: var(--ink); color: var(--bg); border-radius: 999px; padding: 8px 8px 8px 18px; display: flex; gap: 12px; align-items: center; box-shadow: 0 6px 24px rgba(0,0,0,.25); max-width: calc(100vw - 32px); }
+.banner button { border: 0; background: var(--accent); color: var(--accent-ink); border-radius: 999px; padding: 6px 14px; font-weight: 600; }
+
+/* ---------- lightbox ---------- */
+.lb { position: fixed; inset: 0; z-index: 50; background: rgba(8,8,8,.96); display: grid; grid-template-columns: minmax(0, 1fr) 320px; color: #eee; }
+.lb-stage { position: relative; display: grid; place-items: center; overflow: hidden; min-height: 0; }
+.lb-stage img, .lb-stage video { max-width: 100%; max-height: 100vh; object-fit: contain; display: block; }
+.lb-msg { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.7); padding: 8px 14px; border-radius: 8px; font-size: 13px; text-align: center; max-width: 90%; }
+.lb-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; border-radius: 50%; border: 0; background: rgba(255,255,255,.12); color: #fff; display: grid; place-items: center; }
+.lb-nav:hover { background: rgba(255,255,255,.24); }
+.lb-prev { left: 16px; } .lb-next { right: 16px; }
+.lb-close { position: absolute; top: 14px; left: 14px; z-index: 2; }
+.lb-info { background: #161514; border-left: 1px solid #2a2826; padding: 24px 20px; overflow-y: auto; }
+.lb-info h4 { margin: 0 0 4px; font: 600 18px/1.3 Fraunces, Georgia, serif; word-break: break-word; }
+.lb-info .pos { color: #9a948a; font-size: 12px; margin-bottom: 18px; }
+.lb-info dl { margin: 0 0 20px; display: grid; grid-template-columns: 78px 1fr; gap: 8px 10px; font-size: 13px; }
+.lb-info dt { color: #9a948a; }
+.lb-info dd { margin: 0; word-break: break-word; }
+.lb-info dd a { color: #f0956b; }
+.lb-info dd button { border: 0; background: none; padding: 0; color: #f0956b; text-align: left; text-decoration: underline; text-underline-offset: 2px; }
+.lb-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.lb-actions .btn { background: #26241f; border-color: #3a3732; color: #eee; font-size: 13px; }
+.lb-actions .btn:hover { border-color: #777; }
+.lb-actions a.btn { text-decoration: none; }
+.lb-actions .btn[aria-disabled="true"] { opacity: .45; pointer-events: none; }
+
+/* ---------- mobile ---------- */
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 29; }
+@media (max-width: 860px) {
+  :root { --tile: 110px; }
+  header.top { padding: 8px 12px; gap: 8px; }
+  .brand span { display: none; }
+  .who .name, #btnSignOut { display: none; }
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  aside.filters { position: fixed; top: 0; left: 0; bottom: 0; height: 100vh; width: min(300px, 86vw); z-index: 30; background: var(--bg); transform: translateX(-100%); transition: transform .2s; border-right: 1px solid var(--line); padding-top: 20px; }
+  aside.filters.open { transform: none; }
+  main { padding: 14px 12px 80px; }
+  .mobile-only { display: inline-flex; }
+  .group-h { top: 51px; }
+  .summary h2 { font-size: 20px; }
+  #map { height: 340px; }
+  .lb { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; }
+  .lb-stage img, .lb-stage video { max-height: 100%; }
+  .lb-info { border-left: 0; border-top: 1px solid #2a2826; padding: 14px 16px; max-height: 38vh; }
+  .lb-info dl { margin-bottom: 12px; }
+  .lb-nav { width: 40px; height: 40px; }
+  .lb-prev { left: 6px; } .lb-next { right: 6px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============ screens ============ -->
+<section class="screen" id="scr-setup" hidden>
+  <div class="card">
+    <h1>Almost ready</h1>
+    <p>This dashboard needs a Microsoft app registration before anyone can sign in.</p>
+    <ol>
+      <li>Follow <code>SETUP.md</code> to register a free app and get its <b>client ID</b>.</li>
+      <li>Paste the ID into <code>clientId</code> in <code>config.js</code>.</li>
+      <li>Reload this page.</li>
+    </ol>
+    <p>To preview the layout without signing in, open this page with <code>?demo</code> at the end of the address.</p>
+  </div>
+</section>
+
+<section class="screen" id="scr-signin" hidden>
+  <div class="card">
+    <h1 class="js-title">Family Photos</h1>
+    <p>Browse, search and relive the family photo collection. Sign in with the Microsoft account the Photos folder was shared with.</p>
+    <button class="btn primary" id="btnSignIn">
+      <svg width="16" height="16" viewBox="0 0 21 21" aria-hidden="true"><rect width="10" height="10" fill="#f25022"/><rect x="11" width="10" height="10" fill="#7fba00"/><rect y="11" width="10" height="10" fill="#00a4ef"/><rect x="11" y="11" width="10" height="10" fill="#ffb900"/></svg>
+      Sign in with Microsoft
+    </button>
+  </div>
+</section>
+
+<section class="screen" id="scr-loading" hidden>
+  <div class="card">
+    <h1 id="loadTitle">Getting things ready…</h1>
+    <p id="loadText">One moment.</p>
+    <div class="progress"><i></i></div>
+    <p id="loadNote" style="font-size:12.5px"></p>
+  </div>
+</section>
+
+<section class="screen" id="scr-link" hidden>
+  <div class="card">
+    <h1>Where are the photos?</h1>
+    <p>We couldn't find the shared Photos folder in your OneDrive. Paste the link you received for it (from the sharing email, or <b>Shared</b> in OneDrive → the folder → <b>Copy link</b>).</p>
+    <input class="field" id="linkInput" placeholder="https://1drv.ms/f/…" autocomplete="off">
+    <p class="err" id="linkErr"></p>
+    <button class="btn primary" id="btnLink">Use this folder</button>
+    <button class="btn" id="btnSignOut2" style="margin-left:6px">Sign in as someone else</button>
+  </div>
+</section>
+
+<section class="screen" id="scr-error" hidden>
+  <div class="card">
+    <h1>Something went wrong</h1>
+    <p class="err" id="errText"></p>
+    <button class="btn primary" onclick="location.reload()">Try again</button>
+  </div>
+</section>
+
+<!-- ============ app ============ -->
+<div id="app" hidden>
+  <header class="top">
+    <div class="brand">
+      <svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="7" width="26" height="19" rx="4" fill="var(--accent)"/><circle cx="16" cy="16.5" r="5.5" fill="var(--bg)"/><rect x="10" y="4" width="12" height="5" rx="2" fill="var(--accent)"/></svg>
+      <span class="js-title">Family Photos</span>
+    </div>
+    <label class="search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input type="search" id="q" placeholder="Search places, events, names, years…" autocomplete="off" aria-label="Search photos">
+    </label>
+    <button class="iconbtn" id="btnRefresh" title="Check for new photos" aria-label="Check for new photos">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/></svg>
+    </button>
+    <div class="who">
+      <div class="avatar" id="avatar">·</div>
+      <span class="name" id="whoName"></span>
+      <button class="btn" id="btnSignOut" style="padding:5px 12px;font-size:13px">Sign out</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="filters" id="filters">
+      <div class="fgroup">
+        <h3>Show</h3>
+        <div class="chips" id="typeChips">
+          <button class="chip" data-type="photo">Photos</button>
+          <button class="chip" data-type="video">Videos</button>
+        </div>
+      </div>
+      <div class="fgroup">
+        <h3>Places</h3>
+        <p class="places-note" id="placesNote">Reading photo locations…</p>
+        <div id="places"></div>
+      </div>
+      <div class="fgroup">
+        <h3>Folders</h3>
+        <div id="folders"></div>
+      </div>
+      <div class="fgroup">
+        <h3>More categories</h3>
+        <p class="places-note">Hidden unless you tick them. <b>Only</b> shows that category and nothing else.</p>
+        <div id="cats"></div>
+      </div>
+      <p style="font-size:12px;color:var(--muted)" id="catalogInfo"></p>
+      <button class="btn mobile-only" id="btnSignOut3">Sign out</button>
+    </aside>
+
+    <main>
+      <div class="summary">
+        <button class="btn mobile-only" id="btnFilters2" style="padding:5px 12px">Filters</button>
+        <h2 id="viewTitle">All photos</h2>
+        <span class="count" id="viewCount"></span>
+        <span class="spacer"></span>
+        <button class="btn" id="btnMap" style="padding:5px 12px;font-size:13px" aria-pressed="false">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+          Map
+        </button>
+        <div class="seg" id="sortSeg" role="group" aria-label="Sort">
+          <button data-sort="new">Newest</button><button data-sort="old">Oldest</button><button data-sort="shuffle">Shuffle</button>
+        </div>
+        <div class="seg" id="sizeSeg" role="group" aria-label="Thumbnail size">
+          <button data-size="s" title="Small tiles">S</button><button data-size="m" title="Medium tiles">M</button><button data-size="l" title="Large tiles">L</button>
+        </div>
+      </div>
+      <div class="active-filters" id="activeFilters"></div>
+
+      <section class="panel map-panel" id="mapPanel" hidden>
+        <div id="map"></div>
+        <div class="map-bar">
+          <button class="btn" id="btnArea">Show photos in this area</button>
+          <button class="btn" id="btnAreaClear" hidden>Clear area</button>
+        </div>
+        <div class="map-note" id="mapNote"></div>
+      </section>
+
+      <section class="panel" id="timelinePanel">
+        <div class="panel-head"><h3>Through the years</h3><small id="timelineHint">Tap a year to filter</small></div>
+        <div class="timeline" id="timeline"></div>
+      </section>
+
+      <section class="panel" id="otdPanel" hidden>
+        <div class="panel-head"><h3 id="otdTitle">On this day</h3><small id="otdSub"></small></div>
+        <div class="strip" id="otd"></div>
+      </section>
+
+      <div id="results"></div>
+      <div id="sentinel"></div>
+    </main>
+  </div>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<div class="banner" id="throttle" hidden style="padding:8px 18px"></div>
+<div class="banner" id="banner" hidden><span id="bannerText"></span><button id="bannerBtn">Show</button></div>
+
+<!-- ============ lightbox ============ -->
+<div class="lb" id="lb" hidden role="dialog" aria-modal="true" aria-label="Photo viewer">
+  <div class="lb-stage" id="lbStage">
+    <button class="lb-nav lb-close" id="lbClose" aria-label="Close">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+    <img id="lbImg" alt="">
+    <video id="lbVid" controls playsinline hidden></video>
+    <div class="lb-msg" id="lbMsg" hidden></div>
+    <button class="lb-nav lb-prev" id="lbPrev" aria-label="Previous">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m15 5-7 7 7 7"/></svg>
+    </button>
+    <button class="lb-nav lb-next" id="lbNext" aria-label="Next">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m9 5 7 7-7 7"/></svg>
+    </button>
+  </div>
+  <div class="lb-info">
+    <h4 id="lbName"></h4>
+    <div class="pos" id="lbPos"></div>
+    <dl id="lbMeta"></dl>
+    <div class="lb-actions">
+      <a class="btn" id="lbDownload" aria-disabled="true">Download</a>
+      <a class="btn" id="lbOpen" target="_blank" rel="noopener" aria-disabled="true">Open in OneDrive</a>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+/* =====================================================================
+   Settings & constants
+   ===================================================================== */
+const CFG = Object.assign({
+  title: 'Family Photos', clientId: '', authority: 'https://login.microsoftonline.com/consumers',
+  shareUrl: '', ownerPath: 'EEE/Photos', folderName: 'Photos', skipFolders: ['Catalogs', 'Lightroom Presets'],
+}, window.PHOTO_CONFIG || {});
+const DEMO = new URLSearchParams(location.search).has('demo');
+const GRAPH = 'https://graph.microsoft.com/v1.0';
+const SCOPES = ['User.Read', 'Files.Read.All'];
+const PHOTO_EXT = new Set('jpg jpeg png gif webp bmp tif tiff heic heif'.split(' '));
+const RAW_EXT = new Set('cr2 cr3 nef arw dng orf rw2 raf'.split(' '));
+const VIDEO_EXT = new Set('mp4 mov m4v avi 3gp mkv wmv mpg mpeg webm'.split(' '));
+const PLAYABLE = new Set('mp4 m4v mov webm'.split(' '));
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const CAT = { SCREEN: 1, WALL: 2, SOCIAL: 4, DL: 8 };
+// Extra categories: hidden by default, shown with a tick, or shown on their own with "Only".
+const CATS = [
+  { key: 'screens',   label: 'Screenshots',                 has: it => !!(it.cat & CAT.SCREEN) },
+  { key: 'walls',     label: 'Wallpapers',                  has: it => !!(it.cat & CAT.WALL) },
+  { key: 'social',    label: 'Facebook, Messenger & chats', has: it => !!(it.cat & CAT.SOCIAL) },
+  { key: 'downloads', label: 'Downloads',                   has: it => !!(it.cat & CAT.DL) },
+  { key: 'rawTwins',  label: 'RAW copies of JPEGs',         has: it => it.twin },
+];
+const catLabel = key => CATS.find(c => c.key === key).label;
+const REFRESH_AFTER = 12 * 3600e3;   // re-scan OneDrive in the background after 12 hours
+const CHUNK = 240;                   // tiles rendered per scroll step
+
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const extOf = n => { const i = n.lastIndexOf('.'); return i < 0 ? '' : n.slice(i + 1).toLowerCase(); };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const fmtN = n => n.toLocaleString();
+const pretty = s => s.replace(/_/g, ' ');
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('fp.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('fp.' + k, JSON.stringify(v)); } catch {} },
+};
+
+function show(id) {
+  for (const s of ['scr-setup', 'scr-signin', 'scr-loading', 'scr-link', 'scr-error', 'app']) $('#' + s).hidden = s !== id;
+}
+function loading(title, text, note = '') {
+  show('scr-loading'); $('#loadTitle').textContent = title; $('#loadText').textContent = text; $('#loadNote').textContent = note;
+}
+function fail(e) {
+  console.error(e); show('scr-error'); $('#errText').textContent = e && e.message ? e.message : String(e);
+}
+
+/* =====================================================================
+   Microsoft sign-in (MSAL) and Graph requests
+   ===================================================================== */
+let msalApp = null, account = null;
+const APP_URL = location.origin + location.pathname.replace(/index\.html$/, '');   // must match the registered redirect URI
+
+async function initAuth() {
+  if (!window.msal) throw new Error('Could not load the Microsoft sign-in library. Check your internet connection and reload.');
+  msalApp = new msal.PublicClientApplication({
+    auth: { clientId: CFG.clientId, authority: CFG.authority, redirectUri: APP_URL },
+    cache: { cacheLocation: 'localStorage' },
+  });
+  await msalApp.initialize();
+  const res = await msalApp.handleRedirectPromise();
+  account = (res && res.account) || msalApp.getAllAccounts()[0] || null;
+  if (account) msalApp.setActiveAccount(account);
+}
+function signIn() {
+  try { sessionStorage.setItem('fp.hash', location.hash); } catch {}
+  msalApp.loginRedirect({ scopes: SCOPES, prompt: 'select_account' });
+}
+function signOut() { msalApp.logoutRedirect({ account, postLogoutRedirectUri: APP_URL }); }
+
+async function token() {
+  try {
+    return (await msalApp.acquireTokenSilent({ scopes: SCOPES, account })).accessToken;
+  } catch (e) {
+    if (e instanceof msal.InteractionRequiredAuthError) {
+      await msalApp.acquireTokenRedirect({ scopes: SCOPES, account });
+      return new Promise(() => {});   // page is navigating away
+    }
+    throw e;
+  }
+}
+
+// Microsoft Graph rate-limits apps that send too many requests (HTTP 429 + Retry-After).
+const THROTTLE = { until: 0, timer: 0 };
+function noteThrottle(ms) {
+  THROTTLE.until = Math.max(THROTTLE.until, Date.now() + ms);
+  clearInterval(THROTTLE.timer);
+  const tick = () => {
+    const left = Math.ceil((THROTTLE.until - Date.now()) / 1000);
+    const msg = left > 0 ? `Microsoft asked this page to slow down for a moment. Continuing in ${left} s…` : '';
+    $('#loadNote').textContent = msg;
+    $('#throttle').textContent = msg; $('#throttle').hidden = !msg;
+    if (left <= 0) clearInterval(THROTTLE.timer);
+  };
+  tick(); THROTTLE.timer = setInterval(tick, 1000);
+}
+
+async function graph(path, opts = {}, attempt = 0) {
+  const url = path.startsWith('http') ? path : GRAPH + path;
+  const r = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + await token() } });
+  const limit = r.status === 429 ? 8 : 6;
+  if ((r.status === 429 || r.status >= 500) && attempt < limit) {
+    const backoff = r.status === 429 ? Math.min(60e3, 2000 * 2 ** attempt) : 700 * 2 ** attempt;
+    const wait = Math.max(1000, Number(r.headers.get('Retry-After')) * 1000 || backoff);
+    if (r.status === 429) noteThrottle(wait);
+    await sleep(wait);
+    return graph(path, opts, attempt + 1);
+  }
+  if (!r.ok) {
+    let msg = r.status === 429 ? 'Microsoft is limiting how fast this page can load photos right now. Please wait a few minutes, then reload.'
+      : 'Request failed (' + r.status + ')';
+    try { const j = await r.json(); if (j.error && j.error.message && r.status !== 429) msg = j.error.message; } catch {}
+    const err = new Error(msg); err.status = r.status; throw err;
+  }
+  return r.json();
+}
+
+function shareToken(link) {
+  const b64 = btoa(unescape(encodeURIComponent(link.trim())));
+  return 'u!' + b64.replace(/=+$/, '').replace(/\//g, '_').replace(/\+/g, '-');
+}
+
+async function resolveLink(link) {
+  const it = await graph(`/shares/${shareToken(link)}/driveItem?$select=id,name,folder,parentReference,remoteItem`);
+  const r = it.remoteItem || it;
+  return { driveId: r.parentReference.driveId, id: r.id, name: r.name };
+}
+
+// Find the Photos folder: saved link -> configured link -> owner's own path -> "Shared with me".
+async function findRoot() {
+  const attempts = [];
+  const saved = store.get('shareUrl', '');
+  if (saved) attempts.push(() => resolveLink(saved));
+  if (CFG.shareUrl) attempts.push(() => resolveLink(CFG.shareUrl));
+  if (CFG.ownerPath) attempts.push(async () => {
+    const p = CFG.ownerPath.split('/').map(encodeURIComponent).join('/');
+    const it = await graph(`/me/drive/root:/${p}?$select=id,name,parentReference`);
+    return { driveId: it.parentReference.driveId, id: it.id, name: it.name };
+  });
+  attempts.push(async () => {
+    const r = await graph('/me/drive/sharedWithMe');
+    const m = r.value.map(v => v.remoteItem).find(v => v && v.folder && v.name === CFG.folderName);
+    if (!m) throw new Error('Not in Shared with me');
+    return { driveId: m.parentReference.driveId, id: m.id, name: m.name };
+  });
+  for (const a of attempts) {
+    try { return await a(); } catch (e) { if (e.status === 429) throw e; console.warn('Folder lookup attempt failed:', e.message); }
+  }
+  return null;
+}
+
+/* =====================================================================
+   Catalog: crawl the folder tree once, cache it in IndexedDB
+   Each entry: [id, name, dir, size, takenISO, modifiedISO, camera, width, height, durationMs]
+   ===================================================================== */
+const idb = {
+  db: null,
+  async open() {
+    if (!this.db) this.db = await new Promise((res, rej) => {
+      const r = indexedDB.open('family-photos', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('kv');
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    });
+    return this.db;
+  },
+  async get(k) {
+    try {
+      const db = await this.open();
+      return await new Promise((res, rej) => { const q = db.transaction('kv').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+    } catch (e) { console.warn(e); return null; }
+  },
+  async set(k, v) {
+    try {
+      const db = await this.open();
+      await new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+    } catch (e) { console.warn(e); }
+  },
+};
+
+function isMedia(name) { const e = extOf(name); return PHOTO_EXT.has(e) || RAW_EXT.has(e) || VIDEO_EXT.has(e); }
+function skipFolder(name, parentPath) {
+  if (/\.lrdata$/i.test(name) || name.startsWith('.')) return true;
+  return !parentPath && CFG.skipFolders.includes(name);
+}
+
+// GPS from OneDrive's location facet -> [lat, lon] rounded to ~10 m, or [null, null]
+function gps(loc) {
+  if (!loc || typeof loc.latitude !== 'number' || typeof loc.longitude !== 'number') return [null, null];
+  if (!loc.latitude && !loc.longitude) return [null, null];   // 0,0 means "no fix" in most cameras
+  return [Math.round(loc.latitude * 1e4) / 1e4, Math.round(loc.longitude * 1e4) / 1e4];
+}
+
+function crawl(root, onProgress) {
+  const out = [], queue = [{ id: root.id, path: '' }];
+  let active = 0, folders = 0, failed = null;
+  const select = 'id,name,size,folder,file,photo,video,image,fileSystemInfo,location';
+  async function list(f) {
+    let url = `/drives/${root.driveId}/items/${f.id}/children?$top=999&$select=${select}`;
+    while (url) {
+      const r = await graph(url);
+      for (const c of r.value) {
+        if (c.folder) {
+          if (!skipFolder(c.name, f.path)) queue.push({ id: c.id, path: f.path ? f.path + '/' + c.name : c.name });
+        } else if (isMedia(c.name)) {
+          const p = c.photo || {}, dims = c.image || c.video || {};
+          let cam = p.cameraModel || '';
+          if (p.cameraMake && cam && !cam.toLowerCase().startsWith(p.cameraMake.toLowerCase().split(' ')[0])) cam = p.cameraMake + ' ' + cam;
+          out.push([c.id, c.name, f.path, c.size || 0, p.takenDateTime || '', (c.fileSystemInfo || {}).lastModifiedDateTime || '',
+            cam, dims.width || 0, dims.height || 0, (c.video || {}).duration || 0, ...gps(c.location)]);
+        }
+      }
+      url = r['@odata.nextLink'];
+    }
+  }
+  return new Promise((resolve, reject) => {
+    const pump = () => {
+      if (failed) return;
+      if (!queue.length && !active) return resolve(out);
+      while (active < 6 && queue.length) {
+        const f = queue.shift(); active++;
+        list(f).then(() => {
+          active--; folders++; onProgress(folders, out.length); pump();
+        }).catch(e => { failed = e; reject(e); });
+      }
+    };
+    pump();
+  });
+}
+
+/* =====================================================================
+   Turning raw entries into searchable items (dates, categories, keys)
+   ===================================================================== */
+const NOW_Y = new Date().getUTCFullYear();
+const RX_YMD = /(?:^|\D)((?:19[89]|20[0-4])\d)[-_. ]?(0[1-9]|1[0-2])[-_. ]?(0[1-9]|[12]\d|3[01])(?:[-_. T]?([01]\d|2[0-3])[-_.]?([0-5]\d)[-_.]?([0-5]\d))?/;
+const RX_EPOCH = /(?:^|\D)(1[2-7]\d{11})(?:\D|$)/;
+const RX_TOPYEAR = /^((?:19|20)\d{2})(?:\s*-\s*((?:19|20)\d{2}))?(?:\D|$)/;
+
+function okYear(y) { return y >= 1990 && y <= NOW_Y + 1; }
+function dateFromText(s) {
+  const m = RX_YMD.exec(s);
+  if (m && okYear(+m[1])) {
+    const t = Date.UTC(+m[1], +m[2] - 1, +m[3], +(m[4] || 12), +(m[5] || 0), +(m[6] || 0));
+    if (!isNaN(t)) return t;
+  }
+  const e = RX_EPOCH.exec(s);
+  if (e) { const t = +e[1]; if (okYear(new Date(t).getUTCFullYear())) return t; }
+  return null;
+}
+
+let ITEMS = [], CHILDREN = new Map(), ROOT = null, CATALOG_WHEN = 0;
+
+function processCatalog(raw) {
+  const jpgKeys = new Set();
+  for (const r of raw) { const e = extOf(r[1]); if (e === 'jpg' || e === 'jpeg') jpgKeys.add(r[2] + '/' + r[1].replace(/\.[^.]+$/, '').toLowerCase()); }
+  CHILDREN = new Map();
+  const items = raw.map(r => {
+    const [id, name, dir, size, taken, mod, cam, w, h, dur, lat = null, lon = null] = r;
+    const e = extOf(name);
+    const kind = VIDEO_EXT.has(e) ? 'video' : RAW_EXT.has(e) ? 'raw' : 'photo';
+    const fy = RX_TOPYEAR.exec(dir.split('/')[0]);
+    const yLo = fy ? +fy[1] : 0, yHi = fy ? +(fy[2] || fy[1]) : 0;
+
+    // Best date: camera EXIF -> file name -> folder name -> file modified (if it fits the year folder) -> year folder
+    let t = null, approx = false;
+    if (taken) { const x = Date.parse(taken); if (!isNaN(x) && okYear(new Date(x).getUTCFullYear())) t = x; }
+    if (t == null) t = dateFromText(name);
+    if (t == null) { const segs = dir.split('/'); for (let i = segs.length - 1; i >= 0 && t == null; i--) t = dateFromText(segs[i]); }
+    const m = mod ? Date.parse(mod) : NaN;
+    if (t == null && !isNaN(m) && (!yLo || (new Date(m).getUTCFullYear() >= yLo && new Date(m).getUTCFullYear() <= yHi))) t = m;
+    if (t == null && yLo) { t = Date.UTC(yLo, 0, 1); approx = true; }
+    if (t == null && !isNaN(m)) t = m;
+    if (t == null) { t = 0; approx = true; }
+
+    const d = new Date(t), y = d.getUTCFullYear(), mo = d.getUTCMonth();
+    const hay = (dir + '/' + name).toLowerCase();
+    let cat = 0;
+    if (/screen ?shot|screen_?record|screencapture/.test(hay)) cat |= CAT.SCREEN;
+    if (/wallpaper/.test(hay)) cat |= CAT.WALL;
+    if (/facebook|messenger|instagram|whatsapp|viber|telegram|(^|\/)fb_img|-wa\d{4}/.test(hay)) cat |= CAT.SOCIAL;
+    if (/download/.test(dir.toLowerCase())) cat |= CAT.DL;
+
+    const prefixes = [];
+    if (dir) {
+      const segs = dir.split('/');
+      let acc = '';
+      for (const s of segs) {
+        const parent = acc; acc = acc ? acc + '/' + s : s; prefixes.push(acc);
+        if (!CHILDREN.has(parent)) CHILDREN.set(parent, new Set());
+        CHILDREN.get(parent).add(acc);
+      }
+    }
+    const key = [dir, name, t ? MONTHS[mo] + ' ' + y : '', cam].join(' ').toLowerCase().replace(/[_\-.]/g, ' ');
+    const twin = kind === 'raw' && jpgKeys.has(dir + '/' + name.replace(/\.[^.]+$/, '').toLowerCase());
+    return { id, name, dir, size, t, approx, y: t ? y : 0, mo, md: t ? (mo + 1) * 100 + d.getUTCDate() : 0,
+      kind, ext: e, cam, w, h, dur, cat, twin, prefixes, key, key0: key,
+      lat, lon, cell: lat == null ? '' : lat.toFixed(2) + ',' + lon.toFixed(2), place: '', placeName: '', placePrefixes: [] };
+  });
+  return items;
+}
+
+/* =====================================================================
+   Thumbnails: batched Graph requests (20 per call), cached for the session
+   ===================================================================== */
+const TH = { cache: new Map(), q: [], inflight: 0, timer: 0, custom: true };
+
+// el: the grid tile asking for it; if it has scrolled far away by the time we send, we skip it.
+function thumb(it, size, el = null) {
+  if (DEMO) return Promise.resolve(null);
+  const k = it.id + '|' + size;
+  if (TH.cache.has(k)) return TH.cache.get(k);
+  const p = new Promise((resolve, reject) => {
+    const job = { it, size, el, resolve, reject };
+    size === 'big' ? TH.q.unshift(job) : TH.q.push(job);
+    if (!TH.timer) TH.timer = setTimeout(flushThumbs, 25);
+  });
+  TH.cache.set(k, p);
+  p.catch(() => TH.cache.delete(k));
+  return p;
+}
+function stillWanted(j) {
+  if (!j.el) return true;
+  if (!j.el.isConnected) return false;
+  const r = j.el.getBoundingClientRect();
+  return r.bottom > -innerHeight && r.top < innerHeight * 2;
+}
+function flushThumbs() {
+  TH.timer = 0;
+  const pause = THROTTLE.until - Date.now();
+  if (pause > 0) { TH.timer = setTimeout(flushThumbs, pause); return; }
+  while (TH.inflight < 3 && TH.q.length) {
+    const batch = [];
+    while (batch.length < 20 && TH.q.length) {
+      const j = TH.q.shift();
+      if (stillWanted(j)) { batch.push(j); continue; }
+      j.reject(new Error('skipped'));                      // clears the cache entry
+      if (j.el.isConnected) tileObserver.observe(j.el);     // load it if it scrolls back into view
+    }
+    if (!batch.length) break;
+    TH.inflight++;
+    runThumbBatch(batch).finally(() => {
+      TH.inflight--;
+      if (TH.q.length && !TH.timer) TH.timer = setTimeout(flushThumbs, 10);
+    });
+  }
+}
+async function runThumbBatch(batch) {
+  const sel = j => j.size === 'big' ? (TH.custom ? 'c1600x1600' : 'large') : (TH.custom ? 'c400x400_crop' : 'large');
+  const sels = batch.map(sel);
+  const requests = batch.map((j, i) => ({ id: String(i), method: 'GET', url: `/drives/${ROOT.driveId}/items/${j.it.id}/thumbnails?$select=${sels[i]}` }));
+  let res;
+  try {
+    res = await graph('/$batch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ requests }) });
+  } catch (e) { batch.forEach(j => j.reject(e)); return; }
+  const retry = [];
+  for (const r of res.responses) {
+    const j = batch[+r.id], s = sels[+r.id];
+    if (r.status === 200) {
+      const t = r.body && r.body.value && r.body.value[0];
+      j.resolve(t ? ((t[s] && t[s].url) || (t.large && t.large.url) || (t.medium && t.medium.url) || null) : null);
+    } else if (r.status === 429 || r.status >= 500) {
+      if (r.status === 429) noteThrottle(Number(r.headers && r.headers['Retry-After']) * 1000 || 5000);
+      retry.push(j);
+    }
+    else if (r.status === 400 && s.startsWith('c')) { TH.custom = false; retry.push(j); }
+    else j.resolve(null);
+  }
+  if (retry.length) { if (THROTTLE.until <= Date.now()) await sleep(1500); TH.q.unshift(...retry); }
+}
+
+const itemDetails = new Map(), DETAILS_TTL = 45 * 60e3;   // Graph download links expire after about an hour
+function details(it) {
+  const hit = itemDetails.get(it.id);
+  if (hit && Date.now() - hit.at < DETAILS_TTL) return hit.p;
+  const p = graph(`/drives/${ROOT.driveId}/items/${it.id}`);
+  itemDetails.set(it.id, { p, at: Date.now() });
+  p.catch(() => itemDetails.delete(it.id));
+  return p;
+}
+
+/* =====================================================================
+   View state, filtering and rendering
+   ===================================================================== */
+const S = {
+  q: '', years: new Set(), folder: '', place: '', bounds: null, map: false, sort: 'new',
+  types: new Set(store.get('types', ['photo', 'video'])),
+  show: Object.assign({ screens: false, walls: false, social: false, downloads: false, rawTwins: false }, store.get('show', {})),
+  only: '',
+  size: store.get('size', 'm'),
+  seed: 1,
+};
+let VIEW = [], rendered = 0, lastGroup = null, lastGrid = null;
+
+function readHash() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  S.q = h.get('q') || ''; S.folder = h.get('f') || ''; S.sort = h.get('s') || 'new'; S.place = h.get('p') || '';
+  S.only = CATS.some(c => c.key === h.get('c')) ? h.get('c') : '';
+  S.years = new Set((h.get('y') || '').split(',').filter(Boolean).map(Number));
+  const b = (h.get('b') || '').split(',').map(Number);
+  S.bounds = b.length === 4 && b.every(Number.isFinite) ? b : null;
+  S.map = h.get('m') === '1' || !!S.bounds;
+  $('#q').value = S.q;
+}
+function writeHash() {
+  const h = new URLSearchParams();
+  if (S.q) h.set('q', S.q);
+  if (S.years.size) h.set('y', [...S.years].sort().join(','));
+  if (S.folder) h.set('f', S.folder);
+  if (S.place) h.set('p', S.place);
+  if (S.only) h.set('c', S.only);
+  if (S.bounds) h.set('b', S.bounds.map(v => v.toFixed(4)).join(','));
+  if (S.map) h.set('m', '1');
+  if (S.sort !== 'new') h.set('s', S.sort);
+  const str = h.toString();
+  history.replaceState(null, '', str ? '#' + str : location.pathname + location.search);
+}
+
+function passesBase(it) {
+  const k = it.kind === 'video' ? 'video' : 'photo';
+  if (!S.types.has(k)) return false;
+  if (S.only) return CATS.find(c => c.key === S.only).has(it);
+  return CATS.every(c => S.show[c.key] || !c.has(it));   // hide anything in a category that isn't ticked
+}
+function inBounds(it) {
+  if (it.lat == null) return false;
+  const [s, w, n, e] = S.bounds;
+  if (it.lat < s || it.lat > n) return false;
+  return w <= e ? it.lon >= w && it.lon <= e : it.lon >= w || it.lon <= e;   // box may cross the date line
+}
+
+// opts.keepGrid: leave the grid (and scroll position) alone if the result list didn't change.
+function apply(opts = {}) {
+  const tokens = S.q.toLowerCase().replace(/[_\-.]/g, ' ').split(/\s+/).filter(Boolean);
+  const yearCounts = new Map(), folderCounts = new Map(), placeCounts = new Map();
+  const catCounts = Object.fromEntries(CATS.map(c => [c.key, 0]));
+  for (const it of ITEMS) {
+    if (!S.types.has(it.kind === 'video' ? 'video' : 'photo')) continue;
+    for (const c of CATS) if (c.has(it)) catCounts[c.key]++;
+  }
+  const base = [], view = [];
+  let folderTotal = 0, placeTotal = 0;
+  for (const it of ITEMS) {
+    if (!passesBase(it)) continue;
+    base.push(it);
+    const qOk = tokens.every(t => it.key.includes(t));
+    const yOk = !S.years.size || S.years.has(it.y);
+    const fOk = !S.folder || it.dir === S.folder || it.dir.startsWith(S.folder + '/');
+    const pOk = !S.place || it.place === S.place || it.place.startsWith(S.place + '/');
+    const bOk = !S.bounds || inBounds(it);
+    if (qOk && fOk && pOk && bOk && it.y) yearCounts.set(it.y, (yearCounts.get(it.y) || 0) + 1);
+    if (qOk && yOk && pOk && bOk) { folderTotal++; for (const p of it.prefixes) folderCounts.set(p, (folderCounts.get(p) || 0) + 1); }
+    if (qOk && yOk && fOk && bOk && it.place) { placeTotal++; for (const p of it.placePrefixes) placeCounts.set(p, (placeCounts.get(p) || 0) + 1); }
+    if (qOk && yOk && fOk && pOk && bOk) view.push(it);
+  }
+  if (S.sort === 'shuffle') {
+    let s = S.seed;
+    const rnd = () => ((s = Math.imul(s ^ (s >>> 15), 2246822507) + 0x9e3779b9 | 0) >>> 0) / 4294967296;
+    for (let i = view.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [view[i], view[j]] = [view[j], view[i]]; }
+  } else {
+    const dir = S.sort === 'old' ? 1 : -1;
+    view.sort((a, b) => (a.t - b.t) * dir || (a.approx - b.approx) || a.name.localeCompare(b.name));
+  }
+  const unchanged = opts.keepGrid && view.length === VIEW.length && view.every((it, i) => it === VIEW[i]);
+  VIEW = view;
+  writeHash();
+  renderChrome({ view, yearCounts, folderCounts, folderTotal, placeCounts, placeTotal, base, catCounts });
+  if (!unchanged) { renderGrid(); updateMap(); }
+}
+
+function renderChrome({ view, yearCounts, folderCounts, folderTotal, placeCounts, placeTotal, base, catCounts }) {
+  // Title and counts
+  const title = S.folder ? pretty(S.folder.split('/').pop())
+    : S.place ? S.place.split('/').pop()
+    : S.years.size === 1 ? String([...S.years][0])
+    : S.bounds ? 'Photos in this area'
+    : S.only ? catLabel(S.only)
+    : S.q ? 'Search results' : 'All photos';
+  $('#viewTitle').textContent = title;
+  const nv = view.filter(i => i.kind === 'video').length;
+  $('#viewCount').textContent = view.length
+    ? `${fmtN(view.length - nv)} photo${view.length - nv === 1 ? '' : 's'}${nv ? ` · ${fmtN(nv)} video${nv === 1 ? '' : 's'}` : ''}`
+    : '';
+
+  // Active filter chips
+  const chips = [];
+  if (S.q) chips.push(`<button class="chip" data-clear="q"><b>Search</b> ${esc(S.q)} ✕</button>`);
+  for (const y of [...S.years].sort()) chips.push(`<button class="chip" data-clear="y" data-y="${y}"><b>Year</b> ${y} ✕</button>`);
+  if (S.place) chips.push(`<button class="chip" data-clear="p"><b>Place</b> ${esc(S.place.split('/').reverse().join(', '))} ✕</button>`);
+  if (S.only) chips.push(`<button class="chip" data-clear="c"><b>Only</b> ${esc(catLabel(S.only))} ✕</button>`);
+  if (S.bounds) chips.push(`<button class="chip" data-clear="b"><b>Map</b> selected area ✕</button>`);
+  if (S.folder) chips.push(`<button class="chip" data-clear="f"><b>Folder</b> ${esc(pretty(S.folder))} ✕</button>`);
+  if (chips.length > 1) chips.push(`<button class="chip" data-clear="all">Clear all</button>`);
+  $('#activeFilters').innerHTML = chips.join('');
+  $('#activeFilters').hidden = !chips.length;
+
+  // Segmented controls
+  $$('#sortSeg button').forEach(b => b.classList.toggle('on', b.dataset.sort === S.sort));
+  $$('#sizeSeg button').forEach(b => b.classList.toggle('on', b.dataset.size === S.size));
+  $$('#typeChips .chip').forEach(b => b.classList.toggle('on', S.types.has(b.dataset.type)));
+  $('#cats').innerHTML = CATS.map(c => {
+    const on = S.only === c.key, n = catCounts[c.key];
+    return `<div class="cat${S.only && !on ? ' dim' : ''}">
+      <label><input type="checkbox" data-show="${c.key}"${S.show[c.key] || on ? ' checked' : ''}${S.only ? ' disabled' : ''}>
+        <span>${esc(c.label)}</span><span class="n">${fmtN(n)}</span></label>
+      <button class="only${on ? ' on' : ''}" data-only="${c.key}" title="${on ? 'Back to all photos' : 'Show only ' + esc(c.label)}"${n || on ? '' : ' disabled'}>Only</button>
+    </div>`;
+  }).join('');
+
+  renderTimeline(yearCounts);
+  renderFolders(folderCounts, folderTotal);
+  renderPlaces(placeCounts, placeTotal);
+  renderOnThisDay(base);
+}
+
+function renderTimeline(counts) {
+  const ys = [...counts.keys()];
+  const el = $('#timeline');
+  if (!ys.length) { el.innerHTML = '<p style="color:var(--muted);margin:auto">No dated photos match.</p>'; return; }
+  const lo = Math.min(...ys, ...S.years), hi = Math.max(...ys, ...S.years);
+  const max = Math.max(...counts.values());
+  let html = '';
+  for (let y = lo; y <= hi; y++) {
+    const c = counts.get(y) || 0;
+    const h = c ? Math.max(4, Math.round(Math.sqrt(c / max) * 100)) : 2;
+    html += `<button class="bar${S.years.has(y) ? ' on' : ''}${c ? '' : ' zero'}" data-year="${y}" title="${y}: ${fmtN(c)} item${c === 1 ? '' : 's'}" ${c || S.years.has(y) ? '' : 'disabled'}>
+      <i style="height:${h}%"></i><span>'${String(y).slice(2)}</span></button>`;
+  }
+  el.innerHTML = html;
+  $('#timelineHint').textContent = S.years.size ? 'Tap again to remove · Ctrl/⌘-click for several years' : 'Tap a year to filter';
+}
+
+function folderSort(a, b) {
+  const na = a.split('/').pop(), nb = b.split('/').pop();
+  const ya = /^(19|20)\d{2}/.test(na), yb = /^(19|20)\d{2}/.test(nb);
+  if (!a.includes('/') && ya !== yb) return ya ? -1 : 1;              // year folders first at the top level
+  if (!a.includes('/') && ya && yb) return nb.localeCompare(na);      // newest year first
+  return na.localeCompare(nb, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+// Collapsible tree (folders, places): only the branch leading to the selection is expanded.
+function treeHTML({ children, counts, sel, total, allLabel, attr, sort, label, separate }) {
+  let html = `<button class="fold${sel ? '' : ' on'}" ${attr}=""><span class="fn">${allLabel}</span><span>${fmtN(total)}</span></button>`;
+  const walk = (parent, depth) => {
+    const kids = [...(children.get(parent) || [])].filter(k => counts.get(k) || sel === k || sel.startsWith(k + '/')).sort(sort);
+    let prev = null;
+    for (const k of kids) {
+      const name = parent ? k.slice(parent.length + 1) : k;
+      if (separate) { const g = separate(name); if (!depth && prev === true && !g) html += '<div class="fsep"></div>'; prev = g; }
+      const onPath = sel === k || sel.startsWith(k + '/');
+      html += `<button class="fold${sel === k ? ' on' : ''}${onPath ? ' path' : ''}" style="--d:${depth}" ${attr}="${esc(k)}" title="${esc(label(k))}"><span class="fn">${esc(label(name))}</span><span>${fmtN(counts.get(k) || 0)}</span></button>`;
+      if (onPath) walk(k, depth + 1);
+    }
+  };
+  walk('', 0);
+  return html;
+}
+function renderFolders(counts, total) {
+  $('#folders').innerHTML = treeHTML({ children: CHILDREN, counts, sel: S.folder, total, allLabel: 'All folders', attr: 'data-f',
+    sort: folderSort, label: pretty, separate: n => /^(19|20)\d{2}/.test(n) });
+}
+function renderPlaces(counts, total) {
+  const note = $('#placesNote'), box = $('#places');
+  const msg = {
+    loading: 'Finding place names…',
+    none: 'None of the photos have location data yet. Phones usually save it; older cameras don’t. You can add places in dashboard-places.json in the Photos folder.',
+    error: 'Place names couldn’t load. Photos with a location still show on the map.',
+  }[PL.state];
+  if (msg) { note.textContent = msg; box.innerHTML = ''; return; }
+  note.textContent = total ? `${fmtN(total)} photo${total === 1 ? '' : 's'} with a location` : 'None of the photos shown have a location.';
+  box.innerHTML = total || S.place ? treeHTML({ children: PL.children, counts, sel: S.place, total, allLabel: 'All places', attr: 'data-p',
+    sort: (a, b) => (counts.get(b) || 0) - (counts.get(a) || 0) || a.localeCompare(b), label: s => s }) : '';
+}
+
+/* =====================================================================
+   Places: GPS -> nearest town, using the free GeoNames city list (offline,
+   in the browser - photo coordinates are never sent anywhere)
+   ===================================================================== */
+const GEO_URL = 'https://cdn.jsdelivr.net/npm/cities.json@1.1.64/';
+const PL = { state: 'loading', children: new Map() };
+
+async function loadGeocoder() {
+  const get = f => fetch(GEO_URL + f).then(r => { if (!r.ok) throw new Error('Place data unavailable (' + r.status + ')'); return r.json(); });
+  const [cities, admin1] = await Promise.all([get('cities.json'), get('admin1.json')]);
+  const regions = new Map(admin1.map(a => [a.code, a.name]));
+  let countries = null;
+  try { countries = new Intl.DisplayNames(['en'], { type: 'region' }); } catch {}
+  const grid = new Map();   // 1°x1° buckets
+  for (const c of cities) {
+    const la = +c.lat, lo = +c.lng, k = Math.floor(la) * 1000 + Math.floor(lo);
+    let b = grid.get(k); if (!b) grid.set(k, b = []);
+    b.push([la, lo, c]);
+  }
+  return (lat, lon) => {
+    const la0 = Math.floor(lat), lo0 = Math.floor(lon), cos = Math.cos(lat * Math.PI / 180);
+    let best = null, bd = Infinity;
+    for (let r = 1; r <= 5 && !best; r++) {
+      for (let a = -r; a <= r; a++) for (let b = -r; b <= r; b++) {
+        if (r > 1 && Math.max(Math.abs(a), Math.abs(b)) < r) continue;   // only the new outer ring
+        for (const [la, lo, c] of grid.get((la0 + a) * 1000 + lo0 + b) || []) {
+          const d = (la - lat) ** 2 + ((lo - lon) * cos) ** 2;
+          if (d < bd) { bd = d; best = c; }
+        }
+      }
+    }
+    if (!best) return ['', '', ''];
+    let country = best.country;
+    try { country = (countries && countries.of(best.country)) || best.country; } catch {}
+    return [best.name, regions.get(best.country + '.' + best.admin1) || '', country];
+  };
+}
+
+// dashboard-places.json in the Photos folder: places for folders, and where the family lived when.
+// It lives in the shared folder (not in this public site), so only the family can read it.
+const PLACES_FILE = 'dashboard-places.json';
+async function loadPlacesFile() {
+  try {
+    if (DEMO) { const r = await fetch(PLACES_FILE); return r.ok ? await r.json() : null; }
+    const meta = await graph(`/drives/${ROOT.driveId}/items/${ROOT.id}:/${PLACES_FILE}`);
+    const r = await fetch(meta['@microsoft.graph.downloadUrl']);
+    return r.ok ? await r.json() : null;
+  } catch (e) {
+    if (e.status !== 404) console.warn('Could not read ' + PLACES_FILE, e);
+    return null;
+  }
+}
+// "Town, Region, Country" -> ['Country', 'Region', 'Town'] without repeats
+function placeSegs(parts) {
+  const segs = [];
+  for (const s of parts) { const v = (s || '').trim().replace(/\//g, '-'); if (v && v !== segs[segs.length - 1]) segs.push(v); }
+  return segs;
+}
+
+async function resolvePlaces() {
+  const items = ITEMS;
+  PL.state = 'loading';
+  const [manual, cache] = await Promise.all([loadPlacesFile(), idb.get('places:v1').then(c => c || {})]);
+  const cells = new Set(items.filter(i => i.cell).map(i => i.cell));
+  const missing = [...cells].filter(c => !cache[c]);
+  let geoFailed = false;
+  if (missing.length) {
+    try {
+      const nearest = await loadGeocoder();
+      for (const c of missing) { const [a, b] = c.split(',').map(Number); cache[c] = nearest(a, b); }
+      await idb.set('places:v1', cache);
+    } catch (e) { console.warn('Place lookup failed', e); geoFailed = true; }
+  }
+  if (items !== ITEMS) return;   // a newer catalog replaced this one meanwhile
+
+  const folders = ((manual && manual.folders) || []).filter(f => f.folder && f.place && isFinite(f.lat) && isFinite(f.lon))
+    .sort((a, b) => b.folder.length - a.folder.length);   // most specific folder first
+  const homes = ((manual && manual.homes) || []).filter(h => h.place && isFinite(h.lat) && isFinite(h.lon))
+    .map(h => ({ ...h, t0: Date.parse(h.from + 'T00:00:00Z'), t1: Date.parse(h.to + 'T23:59:59Z') }));
+
+  const children = new Map();
+  for (const it of items) {
+    let segs = null;
+    if (it.cell) {                                    // 1. the photo's own GPS
+      const [city, region, country] = cache[it.cell] || [];
+      if (country) { segs = placeSegs([country, region, city]); it.placeSrc = 'gps'; }
+    } else {
+      const f = folders.find(f => it.dir === f.folder || it.dir.startsWith(f.folder + '/'));
+      const h = !f && !it.approx && it.t ? homes.find(h => it.t >= h.t0 && it.t <= h.t1) : null;
+      const m = f || h;                               // 2. folder place, 3. where the family lived then
+      if (m) { segs = placeSegs(m.place.split(',').reverse()); it.lat = m.lat; it.lon = m.lon; it.placeSrc = f ? 'folder' : 'home'; }
+    }
+    if (!segs || !segs.length) continue;
+    it.placeName = segs.slice().reverse().join(', ');
+    it.place = segs.join('/');
+    it.placePrefixes = [];
+    let acc = '';
+    for (const s of segs) {
+      const parent = acc; acc = acc ? acc + '/' + s : s; it.placePrefixes.push(acc);
+      if (!children.has(parent)) children.set(parent, new Set());
+      children.get(parent).add(acc);
+    }
+    it.key = it.key0 + ' ' + it.placeName.toLowerCase().replace(/[_\-.,]/g, ' ');
+  }
+  PL.children = children;
+  PL.state = children.size ? 'ready' : geoFailed ? 'error' : 'none';
+  apply({ keepGrid: true });
+}
+
+/* =====================================================================
+   Map (Leaflet, loaded on first use)
+   ===================================================================== */
+const MAP = { map: null, layer: null, seq: 0, keepView: false };
+const CDNJS = 'https://cdnjs.cloudflare.com/ajax/libs/';
+function loadCss(href) { return new Promise((res, rej) => { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = href; l.onload = res; l.onerror = rej; document.head.appendChild(l); }); }
+function loadJs(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Could not load ' + src)); document.head.appendChild(s); }); }
+
+async function ensureMap() {
+  if (MAP.map) return;
+  if (!MAP.loading) MAP.loading = (async () => {
+    await Promise.all([
+      loadCss(CDNJS + 'leaflet/1.9.4/leaflet.min.css'),
+      loadCss(CDNJS + 'leaflet.markercluster/1.5.3/MarkerCluster.css'),
+      loadJs(CDNJS + 'leaflet/1.9.4/leaflet.min.js'),
+    ]);
+    await loadJs(CDNJS + 'leaflet.markercluster/1.5.3/leaflet.markercluster.js');
+    const m = L.map('map', { worldCopyJump: true }).setView([12.5, 122], 5);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(m);
+    MAP.layer = L.markerClusterGroup({
+      chunkedLoading: true, showCoverageOnHover: false, maxClusterRadius: 50,
+      iconCreateFunction: cl => {
+        const n = cl.getChildCount(), s = n < 10 ? 32 : n < 100 ? 38 : n < 1000 ? 46 : 54;
+        const label = n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1) + 'k' : n;
+        return L.divIcon({ html: `<div class="cluster" style="width:${s}px;height:${s}px">${label}</div>`, className: '', iconSize: [s, s] });
+      },
+    });
+    MAP.layer.on('click', e => openLightbox(VIEW, e.layer.options.idx));
+    m.addLayer(MAP.layer);
+    MAP.icon = L.divIcon({ className: '', html: '<div class="pin"></div>', iconSize: [14, 14] });
+    MAP.iconEst = L.divIcon({ className: '', html: '<div class="pin est" title="Estimated location"></div>', iconSize: [14, 14] });
+    MAP.map = m;
+  })();
+  await MAP.loading;
+}
+
+async function updateMap() {
+  $('#mapPanel').hidden = !S.map;
+  $('#btnMap').setAttribute('aria-pressed', String(S.map));
+  $('#btnMap').style.borderColor = S.map ? 'var(--accent)' : '';
+  $('#btnMap').style.color = S.map ? 'var(--accent)' : '';
+  $('#btnAreaClear').hidden = !S.bounds;
+  if (!S.map) return;
+  const seq = ++MAP.seq;
+  try { await ensureMap(); }
+  catch (e) { MAP.loading = null; $('#mapNote').textContent = 'The map could not load. Check your connection.'; return; }
+  if (seq !== MAP.seq) return;
+  MAP.map.invalidateSize();
+  const markers = [];
+  VIEW.forEach((it, i) => { if (it.lat != null) markers.push(L.marker([it.lat, it.lon], { icon: it.placeSrc === 'home' ? MAP.iconEst : MAP.icon, idx: i, title: it.name })); });
+  MAP.layer.clearLayers();
+  MAP.layer.addLayers(markers);
+  $('#mapNote').textContent = markers.length
+    ? `${fmtN(markers.length)} of ${fmtN(VIEW.length)} on the map`
+    : 'None of these photos have a location';
+  try {
+    if (MAP.keepView) MAP.keepView = false;
+    else if (S.bounds) MAP.map.fitBounds([[S.bounds[0], S.bounds[1]], [S.bounds[2], S.bounds[3]]], { animate: false });
+    else if (markers.length) MAP.map.fitBounds(L.latLngBounds(markers.map(m => m.getLatLng())), { padding: [30, 30], maxZoom: 13, animate: false });
+  } catch (e) { console.warn('Could not fit the map', e); }
+}
+
+function useMapArea() {
+  const b = MAP.map.getBounds();
+  const wrap = x => ((x + 180) % 360 + 360) % 360 - 180;
+  if (b.getEast() - b.getWest() >= 360) S.bounds = null;
+  else S.bounds = [b.getSouth(), wrap(b.getWest()), b.getNorth(), wrap(b.getEast())];
+  MAP.keepView = true;
+  apply();
+}
+
+function renderOnThisDay(base) {
+  const panel = $('#otdPanel');
+  if (S.q || S.years.size || S.folder || S.place || S.bounds || S.only) { panel.hidden = true; return; }
+  const now = new Date(), y = now.getFullYear(), md = (now.getMonth() + 1) * 100 + now.getDate();
+  let hits = base.filter(i => !i.approx && i.md === md && i.y < y), label = 'On this day';
+  if (!hits.length) {
+    const near = new Set();
+    for (let k = -3; k <= 3; k++) { const d = new Date(now); d.setDate(d.getDate() + k); near.add((d.getMonth() + 1) * 100 + d.getDate()); }
+    hits = base.filter(i => !i.approx && near.has(i.md) && i.y < y); label = 'This week, years ago';
+  }
+  if (!hits.length) { panel.hidden = true; return; }
+  // Spread across years: a few from each year, newest years first
+  const byYear = new Map();
+  for (const i of hits) { if (!byYear.has(i.y)) byYear.set(i.y, []); byYear.get(i.y).push(i); }
+  const picks = [];
+  for (const yy of [...byYear.keys()].sort((a, b) => b - a)) picks.push(...byYear.get(yy).sort((a, b) => a.t - b.t).slice(0, 6));
+  const list = picks.slice(0, 30);
+  panel.hidden = false;
+  $('#otdTitle').textContent = label;
+  $('#otdSub').textContent = `${now.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })} · ${byYear.size} year${byYear.size === 1 ? '' : 's'}`;
+  const strip = $('#otd');
+  strip.innerHTML = '';
+  list.forEach((it, i) => {
+    const el = makeTile(it);
+    el.insertAdjacentHTML('beforeend', `<span class="yr">${it.y} · ${y - it.y}y ago</span>`);
+    el.onclick = () => openLightbox(list, i);
+    strip.appendChild(el);
+  });
+}
+
+// ---- grid ----
+const tileObserver = new IntersectionObserver(entries => {
+  for (const e of entries) if (e.isIntersecting) { tileObserver.unobserve(e.target); loadTile(e.target); }
+}, { rootMargin: '500px 0px' });
+
+function hue(id) { let h = 0; for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0; return Math.abs(h) % 360; }
+function fmtDur(ms) { if (!ms) return ''; const s = Math.round(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+
+function makeTile(it) {
+  const el = document.createElement('button');
+  el.className = 'tile';
+  el.setAttribute('aria-label', it.name);
+  el._it = it;
+  let inner = '<img alt="" decoding="async">';
+  if (DEMO) { el.style.background = `hsl(${hue(it.id)} 28% 60% / .35)`; inner += `<span class="ph">${esc(it.name)}</span>`; }
+  if (it.kind === 'video') inner += `<span class="badge">▶ ${fmtDur(it.dur)}</span>`;
+  else if (it.kind === 'raw') inner += '<span class="badge">RAW</span>';
+  el.innerHTML = inner;
+  tileObserver.observe(el);
+  return el;
+}
+function loadTile(el) {
+  thumb(el._it, 'grid', el).then(u => {
+    if (!u) { el.insertAdjacentHTML('beforeend', `<span class="ph">${esc(el._it.name)}</span>`); return; }
+    const img = el.firstChild;
+    img.onload = () => el.classList.add('loaded');
+    img.src = u;
+  }).catch(() => {});
+}
+
+function groupOf(it) {
+  if (S.sort === 'shuffle') return { k: 'all', label: 'Shuffled', sub: '' };
+  if (!it.t) return { k: 'none', label: 'Date unknown', sub: '' };
+  if (it.approx) return { k: it.y + '-x', label: String(it.y), sub: 'exact date unknown' };
+  return { k: it.y + '-' + it.mo, label: MONTHS[it.mo] + ' ' + it.y, sub: '' };
+}
+
+function renderGrid() {
+  const root = $('#results');
+  root.innerHTML = '';
+  rendered = 0; lastGroup = null; lastGrid = null;
+  if (!VIEW.length) {
+    root.innerHTML = `<div class="empty"><h3>No photos found</h3><p>Try a different search, or clear some filters.</p></div>`;
+    return;
+  }
+  renderMore();
+}
+function renderMore() {
+  if (rendered >= VIEW.length) return;
+  const end = Math.min(VIEW.length, rendered + CHUNK);
+  const root = $('#results');
+  const frag = document.createDocumentFragment();
+  for (let i = rendered; i < end; i++) {
+    const it = VIEW[i], g = groupOf(it);
+    if (g.k !== lastGroup) {
+      lastGroup = g.k;
+      const h = document.createElement('div');
+      h.className = 'group-h';
+      h.innerHTML = `${esc(g.label)}${g.sub ? ` <small>${esc(g.sub)}</small>` : ''}`;
+      lastGrid = document.createElement('div');
+      lastGrid.className = 'grid';
+      frag.append(h, lastGrid);
+    }
+    const el = makeTile(it);
+    el.dataset.idx = i;
+    lastGrid.appendChild(el);
+  }
+  root.appendChild(frag);
+  rendered = end;
+}
+new IntersectionObserver(e => { if (e[0].isIntersecting) renderMore(); }, { rootMargin: '1500px 0px' }).observe($('#sentinel'));
+
+/* =====================================================================
+   Lightbox
+   ===================================================================== */
+const LB = { list: [], i: 0, seq: 0 };
+
+function openLightbox(list, i) {
+  LB.list = list; LB.i = i;
+  $('#lb').hidden = false;
+  document.body.style.overflow = 'hidden';
+  showLightbox();
+}
+function closeLightbox() {
+  $('#lb').hidden = true;
+  document.body.style.overflow = '';
+  const v = $('#lbVid'); v.pause(); v.removeAttribute('src'); v.load();
+}
+function fmtBytes(b) { return b > 1e9 ? (b / 1e9).toFixed(1) + ' GB' : b > 1e6 ? (b / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1e3)) + ' KB'; }
+function fmtDate(it) {
+  if (!it.t) return 'Unknown';
+  if (it.approx) return it.y + ' (exact date unknown)';
+  return new Date(it.t).toLocaleDateString(undefined, { timeZone: 'UTC', weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+async function showLightbox() {
+  const it = LB.list[LB.i], seq = ++LB.seq;
+  const img = $('#lbImg'), vid = $('#lbVid'), msg = $('#lbMsg');
+  vid.pause(); vid.hidden = true; vid.removeAttribute('src');
+  msg.hidden = true; img.hidden = false; img.removeAttribute('src');
+
+  $('#lbName').textContent = it.name;
+  $('#lbPos').textContent = `${fmtN(LB.i + 1)} of ${fmtN(LB.list.length)}`;
+  const rows = [['Date', esc(fmtDate(it))]];
+  if (it.dir) rows.push(['Folder', `<button data-goto-folder="${esc(it.dir)}">${esc(pretty(it.dir))}</button>`]);
+  if (it.lat != null) {
+    const osm = `https://www.openstreetmap.org/?mlat=${it.lat}&mlon=${it.lon}#map=15/${it.lat}/${it.lon}`;
+    const src = { folder: 'from the folder name', home: 'estimated: where you lived then' }[it.placeSrc];
+    rows.push(['Place', (it.placeName ? `<button data-goto-place="${esc(it.place)}">${esc(it.placeName)}</button> · ` : '')
+      + `<a href="${osm}" target="_blank" rel="noopener">map</a>` + (src ? `<br><small style="color:#9a948a">${src}</small>` : '')]);
+  }
+  if (it.cam) rows.push(['Camera', esc(it.cam)]);
+  if (it.w && it.h) rows.push(['Size', `${it.w} × ${it.h}${it.size ? ' · ' + fmtBytes(it.size) : ''}`]);
+  else if (it.size) rows.push(['Size', fmtBytes(it.size)]);
+  if (it.dur) rows.push(['Length', fmtDur(it.dur)]);
+  $('#lbMeta').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+  $('#lbPrev').hidden = LB.i === 0;
+  $('#lbNext').hidden = LB.i >= LB.list.length - 1;
+  const dl = $('#lbDownload'), op = $('#lbOpen');
+  for (const a of [dl, op]) { a.removeAttribute('href'); a.setAttribute('aria-disabled', 'true'); }
+  if (!DEMO) details(it).then(d => {
+    if (seq !== LB.seq) return;
+    op.href = d.webUrl;
+    dl.href = d['@microsoft.graph.downloadUrl']; dl.download = d.name;
+    for (const a of [dl, op]) a.setAttribute('aria-disabled', 'false');
+  }).catch(e => { op.title = dl.title = 'Not available: ' + e.message; });
+
+  if (DEMO) { msg.hidden = false; msg.textContent = 'Demo mode: sign in to see the real photo.'; img.hidden = true; return; }
+
+  // Low-res first (already cached from the grid), then sharp version.
+  const small = TH.cache.get(it.id + '|grid');
+  if (small) small.then(u => { if (seq === LB.seq && u && !img.getAttribute('src')) img.src = u; }).catch(() => {});
+  thumb(it, 'big').then(u => {
+    if (seq !== LB.seq) return;
+    if (u) img.src = u;
+    else if (it.kind !== 'video') { img.hidden = true; msg.hidden = false; msg.textContent = 'No preview available for this file. Use Download to open it.'; }
+  }).catch(() => {});
+
+  if (it.kind === 'video') {
+    if (PLAYABLE.has(it.ext)) {
+      try {
+        const d = await details(it);
+        if (seq !== LB.seq) return;
+        vid.poster = img.src || '';
+        vid.src = d['@microsoft.graph.downloadUrl'];
+        img.hidden = true; vid.hidden = false;
+      } catch (e) { msg.hidden = false; msg.textContent = 'Could not load this video: ' + e.message; }
+    } else {
+      msg.hidden = false; msg.textContent = `.${it.ext.toUpperCase()} videos can't play in the browser. Use Download to watch it.`;
+    }
+  }
+  // Warm up neighbours
+  const next = LB.list[LB.i + 1];
+  if (next) thumb(next, 'big').catch(() => {});
+}
+function step(d) {
+  const n = LB.i + d;
+  if (n < 0 || n >= LB.list.length) return;
+  LB.i = n; showLightbox();
+}
+
+/* =====================================================================
+   Wiring
+   ===================================================================== */
+function toggleDrawer(open) {
+  $('#filters').classList.toggle('open', open);
+  $('#scrim').hidden = !open;
+}
+
+function bindUI() {
+  let qTimer = 0;
+  $('#q').addEventListener('input', e => { clearTimeout(qTimer); qTimer = setTimeout(() => { S.q = e.target.value.trim(); apply(); scrollTo(0, 0); }, 180); });
+
+  $('#typeChips').addEventListener('click', e => {
+    const b = e.target.closest('[data-type]'); if (!b) return;
+    const t = b.dataset.type;
+    if (S.types.has(t) && S.types.size > 1) S.types.delete(t); else S.types.add(t);
+    store.set('types', [...S.types]); apply();
+  });
+  $('#cats').addEventListener('change', e => {
+    const i = e.target.closest('[data-show]'); if (!i) return;
+    S.show[i.dataset.show] = i.checked; store.set('show', S.show); apply();
+  });
+  $('#cats').addEventListener('click', e => {
+    const b = e.target.closest('[data-only]'); if (!b || b.disabled) return;
+    S.only = S.only === b.dataset.only ? '' : b.dataset.only;
+    S.folder = ''; S.place = '';   // folder and place lists are rebuilt for the category; an old pick could empty the view
+    apply(); scrollTo(0, 0); toggleDrawer(false);
+  });
+
+  $('#folders').addEventListener('click', e => {
+    const b = e.target.closest('[data-f]'); if (!b) return;
+    S.folder = b.dataset.f; apply(); scrollTo(0, 0);
+    if (!b.dataset.f || !CHILDREN.has(b.dataset.f)) toggleDrawer(false);
+  });
+  $('#places').addEventListener('click', e => {
+    const b = e.target.closest('[data-p]'); if (!b) return;
+    S.place = b.dataset.p; apply(); scrollTo(0, 0);
+    if (!b.dataset.p || !PL.children.has(b.dataset.p)) toggleDrawer(false);
+  });
+  $('#btnMap').onclick = () => { S.map = !S.map; writeHash(); updateMap(); };
+  $('#btnArea').onclick = () => { if (MAP.map) useMapArea(); };
+  $('#btnAreaClear').onclick = () => { S.bounds = null; apply(); };
+  $('#timeline').addEventListener('click', e => {
+    const b = e.target.closest('[data-year]'); if (!b || b.disabled) return;
+    const y = +b.dataset.year;
+    if (e.ctrlKey || e.metaKey || e.shiftKey) { S.years.has(y) ? S.years.delete(y) : S.years.add(y); }
+    else if (S.years.size === 1 && S.years.has(y)) S.years.clear();
+    else S.years = new Set([y]);
+    apply();
+  });
+  $('#activeFilters').addEventListener('click', e => {
+    const b = e.target.closest('[data-clear]'); if (!b) return;
+    const c = b.dataset.clear;
+    if (c === 'q' || c === 'all') { S.q = ''; $('#q').value = ''; }
+    if (c === 'y') S.years.delete(+b.dataset.y);
+    if (c === 'all') S.years.clear();
+    if (c === 'f' || c === 'all') S.folder = '';
+    if (c === 'p' || c === 'all') S.place = '';
+    if (c === 'b' || c === 'all') S.bounds = null;
+    if (c === 'c' || c === 'all') S.only = '';
+    apply();
+  });
+  $('#sortSeg').addEventListener('click', e => {
+    const b = e.target.closest('[data-sort]'); if (!b) return;
+    if (b.dataset.sort === 'shuffle') S.seed = (Math.random() * 2 ** 31) | 0;
+    S.sort = b.dataset.sort; apply(); scrollTo(0, 0);
+  });
+  $('#sizeSeg').addEventListener('click', e => {
+    const b = e.target.closest('[data-size]'); if (!b) return;
+    S.size = b.dataset.size; store.set('size', S.size); applySize();
+    $$('#sizeSeg button').forEach(x => x.classList.toggle('on', x.dataset.size === S.size));
+  });
+  $('#results').addEventListener('click', e => {
+    const t = e.target.closest('.tile'); if (t) openLightbox(VIEW, +t.dataset.idx);
+  });
+
+  $('#btnFilters2').onclick = () => toggleDrawer(true);
+  $('#scrim').onclick = () => toggleDrawer(false);
+  $('#btnSignIn').onclick = signIn;
+  $('#btnSignOut').onclick = $('#btnSignOut2').onclick = $('#btnSignOut3').onclick = () => { if (DEMO) location.href = location.pathname; else signOut(); };
+  $('#btnRefresh').onclick = () => refresh(true, true);
+  $('#bannerBtn').onclick = () => { $('#banner').hidden = true; if (PENDING) { const p = PENDING; PENDING = null; useCatalog(p.raw, p.when); } };
+  $('#btnLink').onclick = async () => {
+    const link = $('#linkInput').value.trim();
+    $('#linkErr').textContent = '';
+    if (!/^https?:\/\//.test(link)) { $('#linkErr').textContent = 'Please paste the full link, starting with https://'; return; }
+    try { ROOT = await resolveLink(link); store.set('shareUrl', link); startCatalog(); }
+    catch (e) { $('#linkErr').textContent = "That link didn't work: " + e.message; }
+  };
+
+  // Lightbox controls
+  $('#lbClose').onclick = closeLightbox;
+  $('#lbPrev').onclick = () => step(-1);
+  $('#lbNext').onclick = () => step(1);
+  $('#lbMeta').addEventListener('click', e => {
+    const b = e.target.closest('[data-goto-folder],[data-goto-place]'); if (!b) return;
+    closeLightbox();
+    S.q = ''; $('#q').value = ''; S.years.clear(); S.bounds = null;
+    if (b.dataset.gotoFolder != null) { S.folder = b.dataset.gotoFolder; S.place = ''; }
+    else { S.place = b.dataset.gotoPlace; S.folder = ''; }
+    apply(); scrollTo(0, 0);
+  });
+  // A download link only works for about an hour: if this one is older, fetch a fresh one first.
+  $('#lbDownload').addEventListener('click', async e => {
+    const it = LB.list[LB.i], hit = itemDetails.get(it.id);
+    if (!hit || Date.now() - hit.at < DETAILS_TTL) return;
+    e.preventDefault();
+    try { const d = await details(it); location.href = d['@microsoft.graph.downloadUrl']; }
+    catch (err) { alert('Download failed: ' + err.message); }
+  });
+  document.addEventListener('keydown', e => {
+    if ($('#lb').hidden) {
+      if (e.key === '/' && document.activeElement !== $('#q')) { e.preventDefault(); $('#q').focus(); }
+      return;
+    }
+    if (e.key === 'Escape') closeLightbox();
+    else if (e.key === 'ArrowLeft') step(-1);
+    else if (e.key === 'ArrowRight') step(1);
+  });
+  let tx = 0, ty = 0;
+  $('#lbStage').addEventListener('touchstart', e => { tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, { passive: true });
+  $('#lbStage').addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) step(dx < 0 ? 1 : -1);
+    else if (dy > 90 && Math.abs(dy) > Math.abs(dx)) closeLightbox();
+  });
+  window.addEventListener('hashchange', () => { readHash(); if (ITEMS.length) apply(); });
+}
+
+function applySize() {
+  const px = { s: 120, m: 180, l: 270 }[S.size] || 180;
+  const mobile = matchMedia('(max-width: 860px)').matches;
+  document.documentElement.style.setProperty('--tile', (mobile ? Math.round(px * 0.62) : px) + 'px');
+}
+
+/* =====================================================================
+   Catalog lifecycle
+   ===================================================================== */
+let BUSY = false, PENDING = null;
+
+function catalogAge() {
+  if (!CATALOG_WHEN) return '';
+  const m = Math.round((Date.now() - CATALOG_WHEN) / 60000);
+  const ago = m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' days ago';
+  return `Catalog of ${fmtN(ITEMS.length)} items · updated ${ago}.`;
+}
+
+function useCatalog(raw, when) {
+  ITEMS = processCatalog(raw);
+  CATALOG_WHEN = when;
+  show('app');
+  applySize();
+  PL.state = 'loading'; PL.children = new Map();
+  apply();
+  $('#catalogInfo').textContent = catalogAge();
+  resolvePlaces();
+}
+
+async function refresh(background, manual = false) {
+  if (BUSY) return;
+  BUSY = true;
+  const btn = $('#btnRefresh');
+  btn.classList.add('spin');
+  if (!background) loading('Building the photo catalog…', 'Looking through the Photos folder. This takes a minute or two the first time; after that it opens instantly.');
+  try {
+    const raw = await crawl(ROOT, (folders, found) => {
+      const t = `${fmtN(found)} photos and videos found in ${fmtN(folders)} folders…`;
+      if (background) btn.title = 'Updating: ' + t; else $('#loadText').textContent = t;
+    });
+    const when = Date.now();
+    await idb.set('catalog2:' + ROOT.id, { raw, when });
+    if (!background || !ITEMS.length) useCatalog(raw, when);
+    else {
+      const old = new Set(ITEMS.map(i => i.id));
+      const added = raw.filter(r => !old.has(r[0])).length;
+      const removed = ITEMS.length - (raw.length - added);
+      if (added || removed) {
+        PENDING = { raw, when };
+        $('#bannerText').textContent = added ? `${fmtN(added)} new photo${added === 1 ? '' : 's'} found` : 'The catalog has changed';
+        $('#banner').hidden = false;
+      } else {
+        CATALOG_WHEN = when;
+        $('#catalogInfo').textContent = catalogAge();
+        if (manual) { $('#bannerText').textContent = 'Everything is up to date'; $('#bannerBtn').hidden = true; $('#banner').hidden = false; setTimeout(() => { $('#banner').hidden = true; $('#bannerBtn').hidden = false; }, 2500); }
+      }
+    }
+  } catch (e) {
+    if (!background) fail(e); else console.warn('Background refresh failed', e);
+  } finally {
+    BUSY = false; btn.classList.remove('spin'); btn.title = 'Check for new photos';
+  }
+}
+
+async function startCatalog() {
+  const cached = await idb.get('catalog2:' + ROOT.id);
+  if (cached && cached.raw) {
+    useCatalog(cached.raw, cached.when);
+    if (Date.now() - cached.when > REFRESH_AFTER) refresh(true);
+  } else {
+    await refresh(false);
+  }
+}
+
+async function main() {
+  document.title = CFG.title;
+  $$('.js-title').forEach(el => { el.textContent = CFG.title; });
+  bindUI();
+  readHash();
+
+  if (DEMO) {
+    ROOT = { driveId: 'demo', id: 'demo', name: 'Photos' };
+    $('#whoName').textContent = 'Demo'; $('#avatar').textContent = 'D'; $('#btnSignOut').textContent = $('#btnSignOut3').textContent = 'Exit demo';
+    loading('Loading demo…', 'Reading demo.json');
+    try {
+      const f = new URLSearchParams(location.search).get('demo');
+      const raw = await (await fetch(/^[\w-]+\.json$/.test(f) ? f : 'demo.json')).json();
+      useCatalog(raw, Date.now());
+    } catch (e) { fail(new Error('demo.json not found. Run make_demo.py to create it.')); }
+    return;
+  }
+  if (!CFG.clientId) return show('scr-setup');
+
+  loading('Signing in…', 'Connecting to Microsoft.');
+  try { await initAuth(); } catch (e) { return fail(e); }
+  if (!account) return show('scr-signin');
+
+  try { const h = sessionStorage.getItem('fp.hash'); if (h) { sessionStorage.removeItem('fp.hash'); history.replaceState(null, '', h); readHash(); } } catch {}
+  const first = (account.name || account.username || '?').trim();
+  $('#whoName').textContent = first.split(' ')[0];
+  $('#avatar').textContent = first.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+
+  try {
+    loading('Finding the photos…', 'Looking for the shared Photos folder in your OneDrive.');
+    ROOT = await findRoot();
+    if (!ROOT) return show('scr-link');
+    await startCatalog();
+  } catch (e) { fail(e); }
+}
+
+main();
+})();
+</script>
+</body>
+</html>
