@@ -12,11 +12,17 @@ window.PHOTO_CONFIG = {
   // Optional: the "Specific people" share link to the Photos folder (SETUP.md, step 1).
   // Never paste an "Anyone with the link" link here - this file is public once hosted.
   // Left blank, the page finds the folder in the owner's OneDrive or in "Shared with me".
-  shareUrl: '',
+  // Shared with the Microsoft Family Group only: verified 2026-09-27 that it's refused without sign-in
+  // and refused for an account outside the family.
+  shareUrl: 'https://1drv.ms/f/c/18cafbba587bf2dd/IgDd8ntYuvvKIIAYKScAAAAAARd7ZtBbeOqWGg2ju43HcyU',
 
   // Where the folder lives in the owner's OneDrive, and its name as family members see it.
   ownerPath: 'EEE/Photos',
   folderName: 'Photos',
+
+  // The owner's private folder: NOT shared, outside Photos. Only the owner sees it in the dashboard, and
+  // OneDrive itself keeps everyone else out. "Make private" moves photos here; "Share again" moves them back.
+  privatePath: 'EEE/Photos-Priv',
 
   // Top-level folders that hold no family photos (Lightroom files, etc.).
   skipFolders: ['Catalogs', 'Lightroom Presets'],

@@ -138,6 +138,37 @@ main { padding: 18px 24px 80px; min-width: 0; }
 .cat .only[disabled] { opacity: .4; cursor: default; }
 .cat .only.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .cat.dim label { opacity: .45; }
+.owner-box { border: 1px dashed var(--accent); border-radius: 10px; padding: 10px 10px 8px; background: var(--accent-soft); }
+.owner-box h3 { color: var(--accent); }
+.owner-box .btn { font-size: 13px; padding: 5px 12px; margin: 0 4px 6px 0; }
+.owner-box .btn.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.tile.sel { outline: 3px solid var(--accent); outline-offset: -3px; }
+.tile.sel::after { content: '✓'; position: absolute; left: 6px; top: 6px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 13px; display: grid; place-items: center; }
+.selecting .tile:not(.sel)::after { content: ''; position: absolute; left: 6px; top: 6px; width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
+.tile .view { display: none; position: absolute; left: 6px; bottom: 6px; width: 30px; height: 30px; border-radius: 50%; background: rgba(0,0,0,.65); color: #fff; font-size: 16px; line-height: 1; place-items: center; border: 1px solid rgba(255,255,255,.5); }
+.tile .view:hover { background: var(--accent); }
+.selecting .tile .view { display: grid; }
+.tile .lock { position: absolute; right: 6px; bottom: 6px; background: rgba(0,0,0,.6); color: #fff; font-size: 11px; padding: 1px 6px; border-radius: 5px; }
+.selbar { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 45; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; background: var(--ink); color: var(--bg); border-radius: 14px; padding: 8px 10px 8px 16px; box-shadow: 0 6px 24px rgba(0,0,0,.3); max-width: calc(100vw - 24px); }
+.selbar b { margin-right: 6px; }
+.selbar button { border: 0; border-radius: 999px; padding: 6px 12px; font-weight: 600; font-size: 13px; background: rgba(255,255,255,.14); color: inherit; }
+.selbar button.primary { background: var(--accent); color: var(--accent-ink); }
+.selbar button.danger { background: #c0392b; color: #fff; }
+.selbar button[hidden] { display: none; }
+.lb-actions .owner { border-style: dashed; }
+.tagchip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); background: var(--chip); border-radius: 999px; padding: 2px 9px; font-size: 12.5px; margin: 0 4px 4px 0; color: var(--ink); }
+.tagchip button { border: 0; background: none; padding: 0; color: var(--muted); font-size: 13px; line-height: 1; }
+.lb-info .tagchip { background: #26241f; border-color: #3a3732; color: #eee; text-decoration: none; }
+.lb-info .tagchip.add { border-style: dashed; color: #f0956b; }
+.fsel, .gsel { display: none; margin-left: auto; margin-right: 6px; border: 1px solid var(--accent); color: var(--accent); background: var(--panel); border-radius: 999px; padding: 0 8px; font-size: 11px; font-weight: 600; line-height: 18px; flex: none; }
+.gsel { margin-left: 8px; }
+.fsel:hover, .gsel:hover { background: var(--accent); color: var(--accent-ink); }
+.selecting .fsel, .selecting .gsel { display: inline-block; }
+.tagdlg { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.45); display: grid; place-items: center; padding: 16px; }
+.tagdlg .card { max-width: 440px; padding: 22px; }
+.tagdlg h1 { font-size: 22px; }
+.tagdlg .row { display: flex; gap: 8px; margin: 12px 0; }
+.tagdlg .row .field { margin: 0; flex: 1; }
 .places-note { font-size: 12px; color: var(--muted); margin: 0 8px 6px; }
 
 .strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; }
@@ -286,6 +317,12 @@ main { padding: 18px 24px 80px; min-width: 0; }
 
   <div class="layout">
     <aside class="filters" id="filters">
+      <div class="fgroup owner-box" id="ownerBox" hidden>
+        <h3>Only you see this</h3>
+        <button class="btn" id="btnReview">Review clutter</button>
+        <button class="btn" id="btnSelect">Select photos</button>
+        <p class="places-note" id="ownerNote" style="margin:2px 0 0"></p>
+      </div>
       <div class="fgroup">
         <h3>Show</h3>
         <div class="chips" id="typeChips">
@@ -297,6 +334,11 @@ main { padding: 18px 24px 80px; min-width: 0; }
         <h3>Places</h3>
         <p class="places-note" id="placesNote">Reading photo locations…</p>
         <div id="places"></div>
+      </div>
+      <div class="fgroup" id="tagsGroup" hidden>
+        <h3>Tags</h3>
+        <p class="places-note" id="tagsNote"></p>
+        <div id="tags"></div>
       </div>
       <div class="fgroup">
         <h3>Folders</h3>
@@ -356,6 +398,30 @@ main { padding: 18px 24px 80px; min-width: 0; }
 </div>
 
 <div class="scrim" id="scrim" hidden></div>
+<div class="selbar" id="selbar" hidden>
+  <b id="selCount"></b>
+  <button id="selAll">Select all shown</button>
+  <button id="selTag" class="primary" title="Add or remove tags on the selected items">Tag…</button>
+  <button id="selKeep" class="primary" title="Keep shared and stop suggesting it">Keep</button>
+  <button id="selPriv" class="primary" title="Move to your private folder">Make private</button>
+  <button id="selShare" title="Move back to the shared Photos folder">Share again</button>
+  <button id="selDel" class="danger" title="Move to the OneDrive recycle bin">Delete</button>
+  <button id="selClear">Done</button>
+</div>
+<div class="tagdlg" id="tagDlg" hidden role="dialog" aria-modal="true" aria-labelledby="tagTitle">
+  <div class="card">
+    <h1 id="tagTitle">Tags</h1>
+    <p id="tagFor"></p>
+    <div id="tagOn"></div>
+    <div class="row">
+      <input class="field" id="tagInput" list="tagList" placeholder="Add a tag, e.g. Beach, Evan, Birthday" autocomplete="off" maxlength="40">
+      <button class="btn primary" id="tagAdd">Add</button>
+    </div>
+    <datalist id="tagList"></datalist>
+    <div id="tagSuggest"></div>
+    <div style="text-align:right;margin-top:12px"><button class="btn" id="tagClose">Done</button></div>
+  </div>
+</div>
 <div class="banner" id="throttle" hidden style="padding:8px 18px"></div>
 <div class="banner" id="banner" hidden><span id="bannerText"></span><button id="bannerBtn">Show</button></div>
 
@@ -383,6 +449,9 @@ main { padding: 18px 24px 80px; min-width: 0; }
       <a class="btn" id="lbDownload" aria-disabled="true">Download</a>
       <a class="btn" id="lbOpen" target="_blank" rel="noopener" aria-disabled="true">Open in OneDrive</a>
       <a class="btn" id="lbFolder" target="_blank" rel="noopener" aria-disabled="true">Show in folder</a>
+      <button class="btn owner" id="lbKeep" hidden title="Keep shared and stop suggesting it">Keep</button>
+      <button class="btn owner" id="lbPriv" hidden>Make private</button>
+      <button class="btn owner" id="lbDel" hidden>Delete</button>
     </div>
   </div>
 </div>
@@ -397,23 +466,27 @@ main { padding: 18px 24px 80px; min-width: 0; }
 const CFG = Object.assign({
   title: 'Family Photos', clientId: '', authority: 'https://login.microsoftonline.com/consumers',
   shareUrl: '', ownerPath: 'EEE/Photos', folderName: 'Photos', skipFolders: ['Catalogs', 'Lightroom Presets'],
+  privatePath: 'EEE/Photos-Priv',
 }, window.PHOTO_CONFIG || {});
 const DEMO = new URLSearchParams(location.search).has('demo');
 const GRAPH = 'https://graph.microsoft.com/v1.0';
 const SCOPES = ['User.Read', 'Files.Read.All'];
+const WRITE_SCOPES = ['Files.ReadWrite'];   // asked for only when the owner moves or deletes something
 const PHOTO_EXT = new Set('jpg jpeg png gif webp bmp tif tiff heic heif'.split(' '));
 const RAW_EXT = new Set('cr2 cr3 nef arw dng orf rw2 raf'.split(' '));
 const VIDEO_EXT = new Set('mp4 mov m4v avi 3gp mkv wmv mpg mpeg webm'.split(' '));
 const PLAYABLE = new Set('mp4 m4v mov webm'.split(' '));
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const CAT = { SCREEN: 1, WALL: 2, SOCIAL: 4, DL: 8 };
+const CAT = { SCREEN: 1, WALL: 2, SOCIAL: 4, DL: 8, DOC: 16 };
 // Extra categories: hidden by default, shown with a tick, or shown on their own with "Only".
 const CATS = [
   { key: 'screens',   label: 'Screenshots',                 has: it => !!(it.cat & CAT.SCREEN) },
   { key: 'walls',     label: 'Wallpapers',                  has: it => !!(it.cat & CAT.WALL) },
   { key: 'social',    label: 'Facebook, Messenger & chats', has: it => !!(it.cat & CAT.SOCIAL) },
   { key: 'downloads', label: 'Downloads',                   has: it => !!(it.cat & CAT.DL) },
+  { key: 'docs',      label: 'Documents & scans',           has: it => !!(it.cat & CAT.DOC) },
   { key: 'rawTwins',  label: 'RAW copies of JPEGs',         has: it => it.twin },
+  { key: 'priv',      label: 'Private (only you)',          has: it => it.priv, owner: true },
 ];
 const catLabel = key => CATS.find(c => c.key === key).label;
 const REFRESH_AFTER = 12 * 3600e3;   // re-scan OneDrive in the background after 12 hours
@@ -464,11 +537,13 @@ function signIn() {
 }
 function signOut() { msalApp.logoutRedirect({ account, postLogoutRedirectUri: APP_URL }); }
 
-async function token() {
+async function token(scopes = SCOPES) {
   try {
-    return (await msalApp.acquireTokenSilent({ scopes: SCOPES, account })).accessToken;
+    return (await msalApp.acquireTokenSilent({ scopes, account })).accessToken;
   } catch (e) {
     if (e instanceof msal.InteractionRequiredAuthError) {
+      // Permission to change files: a popup, so the owner's selection survives
+      if (scopes !== SCOPES) return (await msalApp.acquireTokenPopup({ scopes, account })).accessToken;
       await msalApp.acquireTokenRedirect({ scopes: SCOPES, account });
       return new Promise(() => {});   // page is navigating away
     }
@@ -493,7 +568,8 @@ function noteThrottle(ms) {
 
 async function graph(path, opts = {}, attempt = 0) {
   const url = path.startsWith('http') ? path : GRAPH + path;
-  const r = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + await token() } });
+  const { scopes, ...init } = opts;
+  const r = await fetch(url, { ...init, headers: { ...(init.headers || {}), Authorization: 'Bearer ' + await token(scopes) } });
   const limit = r.status === 429 ? 8 : 6;
   if ((r.status === 429 || r.status >= 500) && attempt < limit) {
     const backoff = r.status === 429 ? Math.min(60e3, 2000 * 2 ** attempt) : 700 * 2 ** attempt;
@@ -508,7 +584,7 @@ async function graph(path, opts = {}, attempt = 0) {
     try { const j = await r.json(); if (j.error && j.error.message && r.status !== 429) msg = j.error.message; } catch {}
     const err = new Error(msg); err.status = r.status; throw err;
   }
-  return r.json();
+  return r.status === 204 ? null : r.json();
 }
 
 function shareToken(link) {
@@ -644,6 +720,12 @@ function dateFromText(s) {
 }
 
 let ITEMS = [], CHILDREN = new Map(), ROOT = null, CATALOG_WHEN = 0;
+let RAW = [];                                             // the catalog as crawled (shared + the owner's private folder)
+let TAGS = new Map();                                     // item id -> ['Beach', 'Evan', ...]
+let OWNER = false, PRIVROOT = null, KEPT = new Set();     // owner-only state
+const PRIV = (CFG.privatePath || 'Photos-Priv').split('/').pop();
+const isPrivDir = dir => dir === PRIV || dir.startsWith(PRIV + '/');
+const baseDir = dir => isPrivDir(dir) ? dir.slice(PRIV.length + 1) : dir;   // path as it would be in Photos
 
 function processCatalog(raw) {
   const jpgKeys = new Set();
@@ -653,14 +735,15 @@ function processCatalog(raw) {
     const [id, name, dir, size, taken, mod, cam, w, h, dur, lat = null, lon = null] = r;
     const e = extOf(name);
     const kind = VIDEO_EXT.has(e) ? 'video' : RAW_EXT.has(e) ? 'raw' : 'photo';
-    const fy = RX_TOPYEAR.exec(dir.split('/')[0]);
+    const priv = isPrivDir(dir), bdir = baseDir(dir);
+    const fy = RX_TOPYEAR.exec(bdir.split('/')[0]);
     const yLo = fy ? +fy[1] : 0, yHi = fy ? +(fy[2] || fy[1]) : 0;
 
     // Best date: camera EXIF -> file name -> folder name -> file modified (if it fits the year folder) -> year folder
     let t = null, approx = false;
     if (taken) { const x = Date.parse(taken); if (!isNaN(x) && okYear(new Date(x).getUTCFullYear())) t = x; }
     if (t == null) t = dateFromText(name);
-    if (t == null) { const segs = dir.split('/'); for (let i = segs.length - 1; i >= 0 && t == null; i--) t = dateFromText(segs[i]); }
+    if (t == null) { const segs = bdir.split('/'); for (let i = segs.length - 1; i >= 0 && t == null; i--) t = dateFromText(segs[i]); }
     const m = mod ? Date.parse(mod) : NaN;
     if (t == null && !isNaN(m) && (!yLo || (new Date(m).getUTCFullYear() >= yLo && new Date(m).getUTCFullYear() <= yHi))) t = m;
     if (t == null && yLo) { t = Date.UTC(yLo, 0, 1); approx = true; }
@@ -668,12 +751,13 @@ function processCatalog(raw) {
     if (t == null) { t = 0; approx = true; }
 
     const d = new Date(t), y = d.getUTCFullYear(), mo = d.getUTCMonth();
-    const hay = (dir + '/' + name).toLowerCase();
+    const hay = (bdir + '/' + name).toLowerCase();
     let cat = 0;
     if (/screen ?shot|screen_?record|screencapture/.test(hay)) cat |= CAT.SCREEN;
     if (/wallpaper/.test(hay)) cat |= CAT.WALL;
     if (/facebook|messenger|instagram|whatsapp|viber|telegram|(^|\/)fb_img|-wa\d{4}/.test(hay)) cat |= CAT.SOCIAL;
     if (/download/.test(dir.toLowerCase())) cat |= CAT.DL;
+    if (/office ?lens|camscanner|(^|\/)scans?(\/|$)|receipts?|ids and sigs|(^|\/)documents?(\/|$)/.test(hay)) cat |= CAT.DOC;
 
     const prefixes = [];
     if (dir) {
@@ -687,8 +771,9 @@ function processCatalog(raw) {
     }
     const key = [dir, name, t ? MONTHS[mo] + ' ' + y : '', cam].join(' ').toLowerCase().replace(/[_\-.]/g, ' ');
     const twin = kind === 'raw' && jpgKeys.has(dir + '/' + name.replace(/\.[^.]+$/, '').toLowerCase());
-    return { id, name, dir, size, t, approx, y: t ? y : 0, mo, md: t ? (mo + 1) * 100 + d.getUTCDate() : 0,
-      kind, ext: e, cam, w, h, dur, cat, twin, prefixes, key, key0: key,
+    const tags = TAGS.get(id) || [];
+    return { id, name, dir, bdir, priv, tags, size, t, approx, y: t ? y : 0, mo, md: t ? (mo + 1) * 100 + d.getUTCDate() : 0,
+      kind, ext: e, cam, w, h, dur, cat, twin, prefixes, key: tags.length ? key + ' ' + tags.join(' ').toLowerCase() : key, key0: key,
       lat, lon, cell: lat == null ? '' : lat.toFixed(2) + ',' + lon.toFixed(2), place: '', placeName: '', placePrefixes: [] };
   });
   return items;
@@ -789,7 +874,9 @@ let VIEW = [], rendered = 0, lastGroup = null, lastGrid = null;
 function readHash() {
   const h = new URLSearchParams(location.hash.slice(1));
   S.q = h.get('q') || ''; S.folder = h.get('f') || ''; S.sort = h.get('s') || 'new'; S.place = h.get('p') || '';
+  S.tag = h.get('t') || '';
   S.only = CATS.some(c => c.key === h.get('c')) ? h.get('c') : '';
+  S.review = h.get('r') === '1';
   S.years = new Set((h.get('y') || '').split(',').filter(Boolean).map(Number));
   const b = (h.get('b') || '').split(',').map(Number);
   S.bounds = b.length === 4 && b.every(Number.isFinite) ? b : null;
@@ -802,7 +889,9 @@ function writeHash() {
   if (S.years.size) h.set('y', [...S.years].sort().join(','));
   if (S.folder) h.set('f', S.folder);
   if (S.place) h.set('p', S.place);
+  if (S.tag) h.set('t', S.tag);
   if (S.only) h.set('c', S.only);
+  if (S.review && OWNER) h.set('r', '1');
   if (S.bounds) h.set('b', S.bounds.map(v => v.toFixed(4)).join(','));
   if (S.map) h.set('m', '1');
   if (S.sort !== 'new') h.set('s', S.sort);
@@ -810,9 +899,14 @@ function writeHash() {
   history.replaceState(null, '', str ? '#' + str : location.pathname + location.search);
 }
 
+// Review queue: shared photos that look like clutter and haven't been marked "Keep"
+const CLUTTER = CATS.filter(c => ['screens', 'walls', 'downloads', 'docs'].includes(c.key));   // chat and Facebook images are often family photos
+const isClutter = it => !it.priv && !KEPT.has(it.id) && CLUTTER.some(c => c.has(it));
+
 function passesBase(it) {
   const k = it.kind === 'video' ? 'video' : 'photo';
   if (!S.types.has(k)) return false;
+  if (S.review && OWNER) return isClutter(it);
   if (S.only) return CATS.find(c => c.key === S.only).has(it);
   return CATS.every(c => S.show[c.key] || !c.has(it));   // hide anything in a category that isn't ticked
 }
@@ -826,7 +920,8 @@ function inBounds(it) {
 // opts.keepGrid: leave the grid (and scroll position) alone if the result list didn't change.
 function apply(opts = {}) {
   const tokens = S.q.toLowerCase().replace(/[_\-.]/g, ' ').split(/\s+/).filter(Boolean);
-  const yearCounts = new Map(), folderCounts = new Map(), placeCounts = new Map();
+  const yearCounts = new Map(), folderCounts = new Map(), placeCounts = new Map(), tagCounts = new Map();
+  const tagLc = S.tag.toLowerCase();
   const catCounts = Object.fromEntries(CATS.map(c => [c.key, 0]));
   for (const it of ITEMS) {
     if (!S.types.has(it.kind === 'video' ? 'video' : 'photo')) continue;
@@ -842,6 +937,8 @@ function apply(opts = {}) {
     const fOk = !S.folder || it.dir === S.folder || it.dir.startsWith(S.folder + '/');
     const pOk = !S.place || it.place === S.place || it.place.startsWith(S.place + '/');
     const bOk = !S.bounds || inBounds(it);
+    if (qOk && yOk && fOk && pOk && bOk) for (const t of it.tags) tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
+    if (tagLc && !it.tags.some(t => t.toLowerCase() === tagLc)) continue;   // tag filter applies to everything below
     if (qOk && fOk && pOk && bOk && it.y) yearCounts.set(it.y, (yearCounts.get(it.y) || 0) + 1);
     if (qOk && yOk && pOk && bOk) { folderTotal++; for (const p of it.prefixes) folderCounts.set(p, (folderCounts.get(p) || 0) + 1); }
     if (qOk && yOk && fOk && bOk && it.place) { placeTotal++; for (const p of it.placePrefixes) placeCounts.set(p, (placeCounts.get(p) || 0) + 1); }
@@ -858,14 +955,16 @@ function apply(opts = {}) {
   const unchanged = opts.keepGrid && view.length === VIEW.length && view.every((it, i) => it === VIEW[i]);
   VIEW = view;
   writeHash();
-  renderChrome({ view, yearCounts, folderCounts, folderTotal, placeCounts, placeTotal, base, catCounts });
+  renderChrome({ view, yearCounts, folderCounts, folderTotal, placeCounts, placeTotal, base, catCounts, tagCounts });
   if (!unchanged) { renderGrid(); updateMap(); }
 }
 
-function renderChrome({ view, yearCounts, folderCounts, folderTotal, placeCounts, placeTotal, base, catCounts }) {
+function renderChrome({ view, yearCounts, folderCounts, folderTotal, placeCounts, placeTotal, base, catCounts, tagCounts }) {
   // Title and counts
-  const title = S.folder ? pretty(S.folder.split('/').pop())
+  const title = S.review && OWNER ? 'Review clutter'
+    : S.folder ? pretty(S.folder.split('/').pop())
     : S.place ? S.place.split('/').pop()
+    : S.tag ? '#' + S.tag
     : S.years.size === 1 ? String([...S.years][0])
     : S.bounds ? 'Photos in this area'
     : S.only ? catLabel(S.only)
@@ -880,7 +979,9 @@ function renderChrome({ view, yearCounts, folderCounts, folderTotal, placeCounts
   const chips = [];
   if (S.q) chips.push(`<button class="chip" data-clear="q"><b>Search</b> ${esc(S.q)} ✕</button>`);
   for (const y of [...S.years].sort()) chips.push(`<button class="chip" data-clear="y" data-y="${y}"><b>Year</b> ${y} ✕</button>`);
+  if (S.tag) chips.push(`<button class="chip" data-clear="t"><b>Tag</b> ${esc(S.tag)} ✕</button>`);
   if (S.place) chips.push(`<button class="chip" data-clear="p"><b>Place</b> ${esc(S.place.split('/').reverse().join(', '))} ✕</button>`);
+  if (S.review && OWNER) chips.push(`<button class="chip" data-clear="r"><b>Review</b> clutter ✕</button>`);
   if (S.only) chips.push(`<button class="chip" data-clear="c"><b>Only</b> ${esc(catLabel(S.only))} ✕</button>`);
   if (S.bounds) chips.push(`<button class="chip" data-clear="b"><b>Map</b> selected area ✕</button>`);
   if (S.folder) chips.push(`<button class="chip" data-clear="f"><b>Folder</b> ${esc(pretty(S.folder))} ✕</button>`);
@@ -892,7 +993,8 @@ function renderChrome({ view, yearCounts, folderCounts, folderTotal, placeCounts
   $$('#sortSeg button').forEach(b => b.classList.toggle('on', b.dataset.sort === S.sort));
   $$('#sizeSeg button').forEach(b => b.classList.toggle('on', b.dataset.size === S.size));
   $$('#typeChips .chip').forEach(b => b.classList.toggle('on', S.types.has(b.dataset.type)));
-  $('#cats').innerHTML = CATS.map(c => {
+  renderOwner();
+  $('#cats').innerHTML = CATS.filter(c => !c.owner || OWNER).map(c => {
     const on = S.only === c.key, n = catCounts[c.key];
     return `<div class="cat${S.only && !on ? ' dim' : ''}">
       <label><input type="checkbox" data-show="${c.key}"${S.show[c.key] || on ? ' checked' : ''}${S.only ? ' disabled' : ''}>
@@ -904,6 +1006,7 @@ function renderChrome({ view, yearCounts, folderCounts, folderTotal, placeCounts
   renderTimeline(yearCounts);
   renderFolders(folderCounts, folderTotal);
   renderPlaces(placeCounts, placeTotal);
+  renderTags(tagCounts);
   renderOnThisDay(base);
 }
 
@@ -942,7 +1045,8 @@ function treeHTML({ children, counts, sel, total, allLabel, attr, sort, label, s
       const name = parent ? k.slice(parent.length + 1) : k;
       if (separate) { const g = separate(name); if (!depth && prev === true && !g) html += '<div class="fsep"></div>'; prev = g; }
       const onPath = sel === k || sel.startsWith(k + '/');
-      html += `<button class="fold${sel === k ? ' on' : ''}${onPath ? ' path' : ''}" style="--d:${depth}" ${attr}="${esc(k)}" title="${esc(label(k))}"><span class="fn">${esc(label(name))}</span><span>${fmtN(counts.get(k) || 0)}</span></button>`;
+      const pick = OWNER ? `<span class="fsel" data-selgroup="${attr}" data-key="${esc(k)}" title="Select everything in here">Select</span>` : '';
+      html += `<button class="fold${sel === k ? ' on' : ''}${onPath ? ' path' : ''}" style="--d:${depth}" ${attr}="${esc(k)}" title="${esc(label(k))}"><span class="fn">${esc(label(name))}</span>${pick}<span>${fmtN(counts.get(k) || 0)}</span></button>`;
       if (onPath) walk(k, depth + 1);
     }
   };
@@ -1053,7 +1157,7 @@ async function resolvePlaces() {
       const [city, region, country] = cache[it.cell] || [];
       if (country) { segs = placeSegs([country, region, city]); it.placeSrc = 'gps'; }
     } else {
-      const f = folders.find(f => it.dir === f.folder || it.dir.startsWith(f.folder + '/'));
+      const f = folders.find(f => it.bdir === f.folder || it.bdir.startsWith(f.folder + '/'));
       const h = !f && !it.approx && it.t ? homes.find(h => it.t >= h.t0 && it.t <= h.t1) : null;
       const m = f || h;                               // 2. folder place, 3. where the family lived then
       if (m) { segs = placeSegs(m.place.split(',').reverse()); it.lat = m.lat; it.lon = m.lon; it.placeSrc = f ? 'folder' : 'home'; }
@@ -1068,7 +1172,7 @@ async function resolvePlaces() {
       if (!children.has(parent)) children.set(parent, new Set());
       children.get(parent).add(acc);
     }
-    it.key = it.key0 + ' ' + it.placeName.toLowerCase().replace(/[_\-.,]/g, ' ');
+    refreshKey(it);
   }
   PL.children = children;
   PL.state = children.size ? 'ready' : geoFailed ? 'error' : 'none';
@@ -1149,7 +1253,7 @@ function useMapArea() {
 
 function renderOnThisDay(base) {
   const panel = $('#otdPanel');
-  if (S.q || S.years.size || S.folder || S.place || S.bounds || S.only) { panel.hidden = true; return; }
+  if (S.q || S.years.size || S.folder || S.place || S.tag || S.bounds || S.only || S.review) { panel.hidden = true; return; }
   const now = new Date(), y = now.getFullYear(), md = (now.getMonth() + 1) * 100 + now.getDate();
   let hits = base.filter(i => !i.approx && i.md === md && i.y < y), label = 'On this day';
   if (!hits.length) {
@@ -1194,7 +1298,10 @@ function makeTile(it) {
   if (DEMO) { el.style.background = `hsl(${hue(it.id)} 28% 60% / .35)`; inner += `<span class="ph">${esc(it.name)}</span>`; }
   if (it.kind === 'video') inner += `<span class="badge">▶ ${fmtDur(it.dur)}</span>`;
   else if (it.kind === 'raw') inner += '<span class="badge">RAW</span>';
+  if (it.priv) inner += '<span class="lock" title="Private: only you can see this">🔒</span>';
+  if (OWNER) inner += '<span class="view" data-view role="button" title="Open to check it (videos play here)">⤢</span>';
   el.innerHTML = inner;
+  if (SEL.has(it.id)) el.classList.add('sel');
   tileObserver.observe(el);
   return el;
 }
@@ -1235,7 +1342,7 @@ function renderMore() {
       lastGroup = g.k;
       const h = document.createElement('div');
       h.className = 'group-h';
-      h.innerHTML = `${esc(g.label)}${g.sub ? ` <small>${esc(g.sub)}</small>` : ''}`;
+      h.innerHTML = `${esc(g.label)}${g.sub ? ` <small>${esc(g.sub)}</small>` : ''}${OWNER ? `<button class="gsel" data-gsel="${esc(g.k)}">Select</button>` : ''}`;
       lastGrid = document.createElement('div');
       lastGrid.className = 'grid';
       frag.append(h, lastGrid);
@@ -1288,6 +1395,8 @@ async function showLightbox() {
     rows.push(['Place', (it.placeName ? `<button data-goto-place="${esc(it.place)}">${esc(it.placeName)}</button> · ` : '')
       + `<a href="${osm}" target="_blank" rel="noopener">map</a>` + (src ? `<br><small style="color:#9a948a">${src}</small>` : '')]);
   }
+  if (it.tags.length || OWNER) rows.push(['Tags', it.tags.map(t => `<span class="tagchip"><button data-goto-tag="${esc(t)}" style="color:inherit;text-decoration:none">${esc(t)}</button>${OWNER ? `<button data-untag="${esc(t)}" title="Remove this tag">✕</button>` : ''}</span>`).join('')
+    + (OWNER ? `<button class="tagchip add" data-addtag>+ Tag</button>` : '')]);
   if (it.cam) rows.push(['Camera', esc(it.cam)]);
   if (it.w && it.h) rows.push(['Size', `${it.w} × ${it.h}${it.size ? ' · ' + fmtBytes(it.size) : ''}`]);
   else if (it.size) rows.push(['Size', fmtBytes(it.size)]);
@@ -1306,7 +1415,18 @@ async function showLightbox() {
     const parent = d.parentReference && d.parentReference.id;
     if (cid && parent) fo.href = `https://onedrive.live.com/?id=${encodeURIComponent(parent)}&cid=${encodeURIComponent(cid)}`;
     for (const a of [dl, op, fo]) if (a.href) a.setAttribute('aria-disabled', 'false');
-  }).catch(e => { op.title = dl.title = fo.title = 'Not available: ' + e.message; });
+  }).catch(e => {
+    op.title = dl.title = fo.title = 'Not available: ' + e.message;
+    if (e.status === 404 && seq === LB.seq) {
+      img.hidden = true; vid.hidden = true; msg.hidden = false;
+      msg.textContent = 'This file was deleted or moved after the catalog was last updated, so it has been taken off the list.';
+      forgetItems([it]);
+    }
+  });
+  $('#lbKeep').hidden = !(OWNER && isClutter(it));
+  $('#lbPriv').hidden = !OWNER;
+  $('#lbPriv').textContent = it.priv ? 'Share again' : 'Make private';
+  $('#lbDel').hidden = !OWNER;
 
   if (DEMO) { msg.hidden = false; msg.textContent = 'Demo mode: sign in to see the real photo.'; img.hidden = true; return; }
 
@@ -1327,7 +1447,7 @@ async function showLightbox() {
         vid.poster = img.src || '';
         vid.src = d['@microsoft.graph.downloadUrl'];
         img.hidden = true; vid.hidden = false;
-      } catch (e) { msg.hidden = false; msg.textContent = 'Could not load this video: ' + e.message; }
+      } catch (e) { if (e.status !== 404) { msg.hidden = false; msg.textContent = 'Could not load this video: ' + e.message; } }
     } else {
       msg.hidden = false; msg.textContent = `.${it.ext.toUpperCase()} videos can't play in the browser. Use Download to watch it.`;
     }
@@ -1372,11 +1492,13 @@ function bindUI() {
   });
 
   $('#folders').addEventListener('click', e => {
+    if (pickGroup(e)) return;
     const b = e.target.closest('[data-f]'); if (!b) return;
     S.folder = b.dataset.f; apply(); scrollTo(0, 0);
     if (!b.dataset.f || !CHILDREN.has(b.dataset.f)) toggleDrawer(false);
   });
   $('#places').addEventListener('click', e => {
+    if (pickGroup(e)) return;
     const b = e.target.closest('[data-p]'); if (!b) return;
     S.place = b.dataset.p; apply(); scrollTo(0, 0);
     if (!b.dataset.p || !PL.children.has(b.dataset.p)) toggleDrawer(false);
@@ -1400,8 +1522,10 @@ function bindUI() {
     if (c === 'all') S.years.clear();
     if (c === 'f' || c === 'all') S.folder = '';
     if (c === 'p' || c === 'all') S.place = '';
+    if (c === 't' || c === 'all') S.tag = '';
     if (c === 'b' || c === 'all') S.bounds = null;
     if (c === 'c' || c === 'all') S.only = '';
+    if (c === 'r' || c === 'all') S.review = false;
     apply();
   });
   $('#sortSeg').addEventListener('click', e => {
@@ -1415,7 +1539,10 @@ function bindUI() {
     $$('#sizeSeg button').forEach(x => x.classList.toggle('on', x.dataset.size === S.size));
   });
   $('#results').addEventListener('click', e => {
-    const t = e.target.closest('.tile'); if (t) openLightbox(VIEW, +t.dataset.idx);
+    const gs = e.target.closest('[data-gsel]');
+    if (gs) return toggleGroup(VIEW.filter(it => groupOf(it).k === gs.dataset.gsel));
+    const t = e.target.closest('.tile'); if (!t) return;
+    if (selecting() && !e.target.closest('[data-view]')) toggleSel(t, e.shiftKey); else openLightbox(VIEW, +t.dataset.idx);
   });
 
   $('#btnFilters2').onclick = () => toggleDrawer(true);
@@ -1437,6 +1564,14 @@ function bindUI() {
   $('#lbPrev').onclick = () => step(-1);
   $('#lbNext').onclick = () => step(1);
   $('#lbMeta').addEventListener('click', e => {
+    const tb = e.target.closest('[data-goto-tag],[data-untag],[data-addtag]');
+    if (tb) {
+      const it = LB.list[LB.i];
+      if (tb.dataset.gotoTag != null) { closeLightbox(); S.tag = tb.dataset.gotoTag; S.q = ''; $('#q').value = ''; apply(); scrollTo(0, 0); }
+      else if (tb.dataset.untag != null) { changeTags([it], tb.dataset.untag, false); showLightbox(); }
+      else openTagDialog([it]);
+      return;
+    }
     const b = e.target.closest('[data-goto-folder],[data-goto-place]'); if (!b) return;
     closeLightbox();
     S.q = ''; $('#q').value = ''; S.years.clear(); S.bounds = null;
@@ -1478,6 +1613,351 @@ function applySize() {
 }
 
 /* =====================================================================
+   Owner tools: private folder, review queue, move / delete
+   Privacy comes from OneDrive: the private folder is not shared, so other accounts can't read it
+   no matter what this page does. The page only decides what to offer.
+   ===================================================================== */
+const catalogKey = () => (OWNER ? 'catalog3o:' : 'catalog3:') + ROOT.id;
+const SEL = new Set(), GONE = new Set();
+
+// Files removed outside this page (another browser, OneDrive itself): drop them from the catalog
+function forgetItems(items) {
+  items.forEach(it => GONE.add(it.id));
+  clearTimeout(forgetItems.t);
+  forgetItems.t = setTimeout(() => afterChange([]), 300);
+}
+let selectMode = false, selAnchor = -1;
+const selecting = () => OWNER && (selectMode || S.review);
+
+async function detectOwner() {
+  OWNER = false; PRIVROOT = null;
+  if (DEMO || !CFG.privatePath) return;
+  try {
+    const me = await graph('/me/drive?$select=id');
+    OWNER = me.id.toLowerCase() === ROOT.driveId.toLowerCase();
+  } catch { return; }
+  if (!OWNER) return;
+  PRIVROOT = await privateRoot(false);
+  KEPT = new Set((await idb.get('kept:' + ROOT.id)) || []);
+  if (PRIVROOT) {                                          // the keep list also lives in the private folder, for other devices
+    try {
+      const f = await graph(`/drives/${PRIVROOT.driveId}/items/${PRIVROOT.id}:/review.json`);
+      const j = await (await fetch(f['@microsoft.graph.downloadUrl'])).json();
+      for (const id of j.kept || []) KEPT.add(id);
+    } catch {}
+  }
+}
+
+async function privateRoot(create) {
+  const path = CFG.privatePath.split('/').map(encodeURIComponent).join('/');
+  try {
+    const it = await graph(`/me/drive/root:/${path}?$select=id,name,parentReference`);
+    return { driveId: it.parentReference.driveId, id: it.id, name: it.name };
+  } catch (e) { if (e.status !== 404 || !create) return null; }
+  const parts = CFG.privatePath.split('/');
+  let parent = (await graph('/me/drive/root?$select=id,parentReference'));
+  const driveId = parent.parentReference.driveId;
+  let id = parent.id;
+  for (const name of parts) id = await ensureChild(driveId, id, name);
+  return { driveId, id, name: parts[parts.length - 1] };
+}
+
+const folderIds = new Map();
+async function ensureChild(driveId, parentId, name) {
+  const k = parentId + '/' + name.toLowerCase();
+  if (folderIds.has(k)) return folderIds.get(k);
+  let id;
+  try {
+    id = (await graph(`/drives/${driveId}/items/${parentId}/children`, { method: 'POST', scopes: WRITE_SCOPES,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, folder: {}, '@microsoft.graph.conflictBehavior': 'fail' }) })).id;
+  } catch (e) {
+    if (e.status !== 409) throw e;                         // already there
+    id = (await graph(`/drives/${driveId}/items/${parentId}:/${encodeURIComponent(name)}?$select=id`)).id;
+  }
+  folderIds.set(k, id);
+  return id;
+}
+async function ensurePath(root, dir) {
+  let id = root.id;
+  for (const seg of dir.split('/').filter(Boolean)) id = await ensureChild(root.driveId, id, seg);
+  return id;
+}
+
+let keptTimer = 0;
+function saveKept() {
+  idb.set('kept:' + ROOT.id, [...KEPT]);
+  clearTimeout(keptTimer);
+  keptTimer = setTimeout(async () => {
+    try {
+      PRIVROOT = PRIVROOT || await privateRoot(true);
+      await graph(`/drives/${PRIVROOT.driveId}/items/${PRIVROOT.id}:/review.json:/content`, { method: 'PUT', scopes: WRITE_SCOPES,
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kept: [...KEPT] }) });
+    } catch (e) { console.warn('Could not save the keep list', e); }
+  }, 1500);
+}
+
+// Run fn over items, 4 at a time, with progress in the selection bar
+async function runEach(items, verb, fn) {
+  const bar = $('#selCount'); let done = 0; const failed = [];
+  const queue = [...items];
+  const worker = async () => {
+    for (let it; (it = queue.shift());) {
+      try { await fn(it); } catch (e) {
+        if (e.status === 404) GONE.add(it.id);           // deleted or moved elsewhere already
+        else { console.warn(verb, it.name, e); failed.push(it); }
+      }
+      bar.textContent = `${verb} ${++done} / ${items.length}…`;
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, items.length) }, worker));
+  return failed;
+}
+
+async function moveItems(items, toPrivate) {
+  if (toPrivate) PRIVROOT = PRIVROOT || await privateRoot(true);
+  const byId = new Map(RAW.map(r => [r[0], r]));
+  return runEach(items, toPrivate ? 'Making private' : 'Sharing', async it => {
+    const root = toPrivate ? PRIVROOT : ROOT;
+    const parent = await ensurePath(root, it.bdir);
+    const res = await graph(`/drives/${root.driveId}/items/${it.id}`, { method: 'PATCH', scopes: WRITE_SCOPES,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parentReference: { id: parent }, '@microsoft.graph.conflictBehavior': 'rename' }) });
+    const r = byId.get(it.id);
+    if (r) { r[1] = res.name || r[1]; r[2] = toPrivate ? (it.bdir ? PRIV + '/' + it.bdir : PRIV) : it.bdir; }
+  });
+}
+
+async function deleteItems(items) {
+  const gone = new Set();
+  const failed = await runEach(items, 'Deleting', async it => {
+    await graph(`/drives/${ROOT.driveId}/items/${it.id}`, { method: 'DELETE', scopes: WRITE_SCOPES });
+    gone.add(it.id); TAGS.delete(it.id);
+  });
+  RAW = RAW.filter(r => !gone.has(r[0]));
+  return failed;
+}
+
+// Rebuild after changes without losing the place in the list
+async function afterChange(failed) {
+  if (GONE.size) { RAW = RAW.filter(r => !GONE.has(r[0])); GONE.forEach(id => TAGS.delete(id)); GONE.clear(); }
+  await idb.set(catalogKey(), { raw: RAW, when: CATALOG_WHEN });
+  const y = scrollY;
+  ITEMS = processCatalog(RAW);
+  apply();
+  while (rendered < VIEW.length && document.documentElement.scrollHeight < y + innerHeight) renderMore();
+  scrollTo(0, y);
+  resolvePlaces();
+  if (TAGS.size) saveTags();                              // a moved item's tags follow it to the right file
+  if (failed.length) alert(`${failed.length} item(s) couldn't be changed. See the browser console for details.`);
+}
+
+async function ownerAction(kind, items) {
+  if (!items.length) return;
+  if (kind === 'del' && !confirm(`Delete ${items.length} item${items.length === 1 ? '' : 's'}?\n\nThey go to your OneDrive recycle bin, where you can restore them for 30 days.`)) return;
+  $('#selbar').hidden = false;
+  const btns = $$('#selbar button'); btns.forEach(b => b.disabled = true);
+  let failed = [];
+  try {
+    if (kind === 'keep') { items.forEach(it => KEPT.add(it.id)); saveKept(); }
+    else if (kind === 'priv') failed = await moveItems(items.filter(it => !it.priv), true);
+    else if (kind === 'share') failed = await moveItems(items.filter(it => it.priv), false);
+    else if (kind === 'del') failed = await deleteItems(items);
+  } catch (e) { alert('That didn\'t work: ' + e.message); }
+  btns.forEach(b => b.disabled = false);
+  for (const it of items) if (!failed.includes(it)) SEL.delete(it.id);
+  await afterChange(failed);
+}
+
+function renderOwner() {
+  $('#ownerBox').hidden = !OWNER;
+  if (!OWNER) return;
+  const n = ITEMS.filter(it => S.types.has(it.kind === 'video' ? 'video' : 'photo') && isClutter(it)).length;
+  const p = ITEMS.filter(it => it.priv).length;
+  $('#btnReview').textContent = S.review ? 'Leave review' : `Review clutter (${fmtN(n)})`;
+  $('#btnReview').classList.toggle('on', S.review);
+  $('#btnSelect').classList.toggle('on', selectMode);
+  $('#btnSelect').hidden = S.review;
+  $('#ownerNote').textContent = `${fmtN(p)} private item${p === 1 ? '' : 's'} in ${PRIV}. Your family can't see them.`;
+  document.body.classList.toggle('selecting', selecting());
+  updateSelbar();
+}
+
+function updateSelbar() {
+  const bar = $('#selbar');
+  bar.hidden = !selecting();
+  if (bar.hidden) return;
+  const items = ITEMS.filter(it => SEL.has(it.id));
+  $('#selCount').textContent = items.length ? `${fmtN(items.length)} selected` : 'Tap photos to select · ⤢ to open one';
+  $('#selKeep').hidden = !S.review || !items.length;
+  $('#selPriv').hidden = !items.some(it => !it.priv);
+  $('#selShare').hidden = !items.some(it => it.priv);
+  $('#selDel').hidden = !items.length;
+  $('#selTag').hidden = !items.length;
+}
+
+function toggleSel(el, range) {
+  const i = +el.dataset.idx;
+  const ids = range && selAnchor >= 0 ? VIEW.slice(Math.min(i, selAnchor), Math.max(i, selAnchor) + 1).map(it => it.id) : [VIEW[i].id];
+  const on = !SEL.has(VIEW[i].id);
+  for (const id of ids) on ? SEL.add(id) : SEL.delete(id);
+  selAnchor = i;
+  $$('#results .tile').forEach(t => t.classList.toggle('sel', SEL.has(VIEW[+t.dataset.idx].id)));
+  updateSelbar();
+}
+
+function bindOwnerUI() {
+  $('#btnReview').onclick = () => { S.review = !S.review; SEL.clear(); apply(); scrollTo(0, 0); toggleDrawer(false); };
+  $('#btnSelect').onclick = () => { selectMode = !selectMode; SEL.clear(); renderOwner(); };
+  $('#selAll').onclick = () => { VIEW.forEach(it => SEL.add(it.id)); $$('#results .tile').forEach(t => t.classList.add('sel')); updateSelbar(); };
+  $('#selClear').onclick = () => { SEL.clear(); selectMode = false; if (S.review) { S.review = false; apply(); } else renderOwner(); $$('#results .tile.sel').forEach(t => t.classList.remove('sel')); };
+  const picked = () => ITEMS.filter(it => SEL.has(it.id));
+  $('#selKeep').onclick = () => ownerAction('keep', picked());
+  $('#selPriv').onclick = () => ownerAction('priv', picked());
+  $('#selShare').onclick = () => ownerAction('share', picked());
+  $('#selDel').onclick = () => ownerAction('del', picked());
+  $('#selTag').onclick = () => openTagDialog(picked());
+  const lbAct = async kind => {
+    const it = LB.list[LB.i], i = LB.i;
+    await ownerAction(kind, [it]);
+    LB.list = VIEW;
+    if (!VIEW.length) return closeLightbox();
+    LB.i = Math.min(i, VIEW.length - 1); showLightbox();
+  };
+  $('#lbKeep').onclick = () => lbAct('keep');
+  $('#lbPriv').onclick = () => lbAct(LB.list[LB.i].priv ? 'share' : 'priv');
+  $('#lbDel').onclick = () => lbAct('del');
+}
+
+/* =====================================================================
+   Tags. Shared items' tags live in Photos/dashboard-tags.json (the family can read them);
+   private items' tags live in Photos-Priv/tags.json, so no private labels end up in the shared folder.
+   Only the owner can change tags (for now).
+   ===================================================================== */
+const TAGS_FILE = 'dashboard-tags.json', PRIV_TAGS_FILE = 'tags.json';
+
+function refreshKey(it) {
+  it.key = it.key0 + (it.placeName ? ' ' + it.placeName.toLowerCase().replace(/[_\-.,]/g, ' ') : '')
+    + (it.tags.length ? ' ' + it.tags.join(' ').toLowerCase() : '');
+}
+async function readJsonFile(root, name) {
+  try {
+    const meta = await graph(`/drives/${root.driveId}/items/${root.id}:/${encodeURIComponent(name)}`);
+    const r = await fetch(meta['@microsoft.graph.downloadUrl']);
+    return r.ok ? await r.json() : null;
+  } catch (e) { if (e.status !== 404) console.warn('Could not read ' + name, e); return null; }
+}
+async function loadTags() {
+  TAGS = new Map();
+  if (DEMO) return;
+  const files = [await readJsonFile(ROOT, TAGS_FILE)];
+  if (OWNER && PRIVROOT) files.push(await readJsonFile(PRIVROOT, PRIV_TAGS_FILE));
+  for (const f of files) for (const [id, list] of Object.entries((f && f.tags) || {})) if (Array.isArray(list) && list.length) TAGS.set(id, list);
+}
+let tagsTimer = 0;
+function saveTags() {
+  if (DEMO || !OWNER) return;
+  clearTimeout(tagsTimer);
+  tagsTimer = setTimeout(async () => {
+    const priv = new Set(ITEMS.filter(it => it.priv).map(it => it.id));
+    const shared = {}, mine = {};
+    for (const [id, list] of TAGS) if (list.length) (priv.has(id) ? mine : shared)[id] = list;
+    const put = (root, name, body) => graph(`/drives/${root.driveId}/items/${root.id}:/${encodeURIComponent(name)}:/content`,
+      { method: 'PUT', scopes: WRITE_SCOPES, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    try {
+      await put(ROOT, TAGS_FILE, { about: 'Tags for the Family Photos dashboard (item id -> tags). Edited from the dashboard.', tags: shared });
+      if (Object.keys(mine).length || PRIVROOT) {
+        PRIVROOT = PRIVROOT || await privateRoot(true);
+        await put(PRIVROOT, PRIV_TAGS_FILE, { about: 'Tags for private items (only the owner can read this).', tags: mine });
+      }
+    } catch (e) { alert('Tags could not be saved: ' + e.message); }
+  }, 800);
+}
+const cleanTag = s => s.trim().replace(/\s+/g, ' ').replace(/^#/, '').slice(0, 40);
+function allTags() {
+  const n = new Map();
+  for (const list of TAGS.values()) for (const t of list) n.set(t, (n.get(t) || 0) + 1);
+  return [...n].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+function changeTags(items, tag, add) {
+  tag = cleanTag(tag); if (!tag) return;
+  const same = allTags().find(([t]) => t.toLowerCase() === tag.toLowerCase());   // reuse existing spelling
+  if (same) tag = same[0];
+  for (const it of items) {
+    const cur = (TAGS.get(it.id) || []).filter(t => t.toLowerCase() !== tag.toLowerCase());
+    if (add) cur.push(tag);
+    cur.length ? TAGS.set(it.id, cur) : TAGS.delete(it.id);
+    it.tags = cur; refreshKey(it);
+  }
+  saveTags();
+  apply({ keepGrid: true });
+}
+function renderTags(counts) {
+  const has = TAGS.size > 0;
+  $('#tagsGroup').hidden = !has && !OWNER;
+  if (!has) { $('#tagsNote').textContent = 'No tags yet. Select photos, then press Tag… to add one.'; $('#tags').innerHTML = ''; return; }
+  const list = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  if (S.tag && !counts.has(S.tag)) list.unshift([S.tag, 0]);
+  $('#tagsNote').textContent = list.length ? '' : 'None of the photos shown have tags.';
+  $('#tags').innerHTML = (S.tag ? `<button class="fold" data-tag=""><span class="fn">All tags</span><span></span></button>` : '')
+    + list.map(([t, n]) => `<button class="fold${S.tag === t ? ' on' : ''}" data-tag="${esc(t)}"><span class="fn"># ${esc(t)}</span><span>${fmtN(n)}</span></button>`).join('');
+}
+
+let tagItems = [];
+function openTagDialog(items) {
+  if (!items.length) return;
+  tagItems = items;
+  $('#tagFor').textContent = items.length === 1 ? items[0].name : `${fmtN(items.length)} selected items`;
+  renderTagDialog();
+  $('#tagDlg').hidden = false;
+  $('#tagInput').value = ''; $('#tagInput').focus();
+}
+function renderTagDialog() {
+  const on = new Map();
+  for (const it of tagItems) for (const t of it.tags) on.set(t, (on.get(t) || 0) + 1);
+  $('#tagOn').innerHTML = on.size
+    ? '<p style="margin-bottom:6px">On ' + (tagItems.length === 1 ? 'this item' : 'these items') + ':</p>' + [...on].map(([t, n]) =>
+        `<span class="tagchip">${esc(t)}${tagItems.length > 1 ? ` <small>${n}</small>` : ''}<button data-dlg-untag="${esc(t)}" title="Remove from ${tagItems.length === 1 ? 'this item' : 'all selected'}">✕</button></span>`).join('')
+    : '<p>No tags yet.</p>';
+  const all = allTags();
+  $('#tagList').innerHTML = all.map(([t]) => `<option value="${esc(t)}">`).join('');
+  const sugg = all.filter(([t]) => !on.has(t) || on.get(t) < tagItems.length).slice(0, 14);
+  $('#tagSuggest').innerHTML = sugg.length ? '<p style="margin-bottom:6px">Your tags:</p>' + sugg.map(([t]) => `<button class="tagchip" data-dlg-tag="${esc(t)}">+ ${esc(t)}</button>`).join('') : '';
+}
+function bindTagUI() {
+  const add = () => { const v = $('#tagInput').value; if (cleanTag(v)) { changeTags(tagItems, v, true); $('#tagInput').value = ''; renderTagDialog(); } };
+  $('#tagAdd').onclick = add;
+  $('#tagInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); add(); } if (e.key === 'Escape') $('#tagClose').click(); });
+  $('#tagDlg').addEventListener('click', e => {
+    const a = e.target.closest('[data-dlg-tag]'), r = e.target.closest('[data-dlg-untag]');
+    if (a) { changeTags(tagItems, a.dataset.dlgTag, true); renderTagDialog(); }
+    if (r) { changeTags(tagItems, r.dataset.dlgUntag, false); renderTagDialog(); }
+    if (e.target === $('#tagDlg')) $('#tagClose').click();
+  });
+  $('#tagClose').onclick = () => { $('#tagDlg').hidden = true; if (!$('#lb').hidden) showLightbox(); };
+  $('#tags').addEventListener('click', e => {
+    const b = e.target.closest('[data-tag]'); if (!b) return;
+    S.tag = S.tag === b.dataset.tag ? '' : b.dataset.tag; apply(); scrollTo(0, 0); toggleDrawer(false);
+  });
+}
+
+// Selecting whole groups: a folder (with subfolders), a place, or a month heading
+function toggleGroup(items) {
+  if (!items.length) return;
+  const on = !items.every(it => SEL.has(it.id));
+  for (const it of items) on ? SEL.add(it.id) : SEL.delete(it.id);
+  $$('#results .tile').forEach(t => t.classList.toggle('sel', SEL.has(VIEW[+t.dataset.idx].id)));
+  updateSelbar();
+}
+function pickGroup(e) {
+  const g = e.target.closest('[data-selgroup]'); if (!g) return false;
+  e.stopPropagation(); e.preventDefault();
+  const k = g.dataset.key, field = g.dataset.selgroup === 'data-f' ? 'dir' : 'place';
+  toggleGroup(ITEMS.filter(it => passesBase(it) && (!k || it[field] === k || it[field].startsWith(k + '/'))));
+  return true;
+}
+
+/* =====================================================================
    Catalog lifecycle
    ===================================================================== */
 let BUSY = false, PENDING = null;
@@ -1490,6 +1970,7 @@ function catalogAge() {
 }
 
 function useCatalog(raw, when) {
+  RAW = raw;
   ITEMS = processCatalog(raw);
   CATALOG_WHEN = when;
   show('app');
@@ -1507,12 +1988,18 @@ async function refresh(background, manual = false) {
   btn.classList.add('spin');
   if (!background) loading('Building the photo catalog…', 'Looking through the Photos folder. This takes a minute or two the first time; after that it opens instantly.');
   try {
-    const raw = await crawl(ROOT, (folders, found) => {
+    const progress = (folders, found) => {
       const t = `${fmtN(found)} photos and videos found in ${fmtN(folders)} folders…`;
       if (background) btn.title = 'Updating: ' + t; else $('#loadText').textContent = t;
-    });
+    };
+    const raw = await crawl(ROOT, progress);
+    if (OWNER && PRIVROOT) {                              // the owner also sees their private folder
+      const priv = await crawl(PRIVROOT, progress);
+      for (const r of priv) r[2] = r[2] ? PRIV + '/' + r[2] : PRIV;
+      raw.push(...priv);
+    }
     const when = Date.now();
-    await idb.set('catalog2:' + ROOT.id, { raw, when });
+    await idb.set(catalogKey(), { raw, when });
     if (!background || !ITEMS.length) useCatalog(raw, when);
     else {
       const old = new Set(ITEMS.map(i => i.id));
@@ -1536,7 +2023,7 @@ async function refresh(background, manual = false) {
 }
 
 async function startCatalog() {
-  const cached = await idb.get('catalog2:' + ROOT.id);
+  const cached = await idb.get(catalogKey());
   if (cached && cached.raw) {
     useCatalog(cached.raw, cached.when);
     if (Date.now() - cached.when > REFRESH_AFTER) refresh(true);
@@ -1549,10 +2036,13 @@ async function main() {
   document.title = CFG.title;
   $$('.js-title').forEach(el => { el.textContent = CFG.title; });
   bindUI();
+  bindOwnerUI();
+  bindTagUI();
   readHash();
 
   if (DEMO) {
     ROOT = { driveId: 'demo', id: 'demo', name: 'Photos' };
+    OWNER = new URLSearchParams(location.search).has('owner');   // preview the owner tools (actions need a real sign-in)
     $('#whoName').textContent = 'Demo'; $('#avatar').textContent = 'D'; $('#btnSignOut').textContent = $('#btnSignOut3').textContent = 'Exit demo';
     loading('Loading demo…', 'Reading demo.json');
     try {
@@ -1577,6 +2067,8 @@ async function main() {
     loading('Finding the photos…', 'Looking for the shared Photos folder in your OneDrive.');
     ROOT = await findRoot();
     if (!ROOT) return show('scr-link');
+    await detectOwner();
+    await loadTags();
     await startCatalog();
   } catch (e) { fail(e); }
 }
