@@ -89,6 +89,12 @@ Send that link to your family. On phones, they can use **Share → Add to Home S
   back in, or press **Only** to see that category and nothing else. The folders, places and timeline then shrink to
   match. Press **Only** again, or the ✕ on its chip, to go back. Document scans (Office Lens, receipts, IDs) are a
   category too.
+- **Files tab (owner only):** next to the title, **Photos | Files** switches to a list of every file in `EEE`, except
+  `Photos` and `Photos-Priv`. It's set by `filesPath` in `config.js`. You get a folder tree, type filters (PDF, Word,
+  Spreadsheets, Images…), sorting by name, date or size, and name search (files whose name matches come first).
+  **Search inside documents** uses OneDrive's full-text search. Clicking a file opens a panel with a preview of its first
+  page and **Open in OneDrive / Download / Show in folder**. Family members never get this tab, and nothing in `EEE` is
+  shared by it. ⟳ updates the list, and it also refreshes itself every 12 hours. Office lock files (`~$…`) are hidden.
 - **Private photos (owner only):** `EEE\Photos-Priv` is *not* shared, so only you can open it. OneDrive enforces
   this, not the website. When you're signed in, the dashboard spots that you own the Photos folder and adds an
   **"Only you see this"** box at the top of the left panel:

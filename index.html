@@ -169,6 +169,47 @@ main { padding: 18px 24px 80px; min-width: 0; }
 .tagdlg h1 { font-size: 22px; }
 .tagdlg .row { display: flex; gap: 8px; margin: 12px 0; }
 .tagdlg .row .field { margin: 0; flex: 1; }
+.tabs { flex: none; }
+.tabs button { padding: 6px 14px; font-weight: 500; }
+.ftypes .chip small { color: var(--muted); margin-left: 4px; }
+.flist { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); }
+.frow { display: grid; grid-template-columns: 34px minmax(0, 1fr) 130px 80px; gap: 12px; align-items: center; text-align: left; border: 0; border-bottom: 1px solid var(--line); background: none; padding: 9px 14px; width: 100%; }
+.frow:hover { background: var(--chip); }
+.frow.on { background: var(--accent-soft); }
+.frow .ic { width: 30px; height: 34px; border-radius: 5px; display: grid; place-items: center; font-size: 9.5px; font-weight: 700; color: #fff; letter-spacing: .02em; }
+.frow .nm { min-width: 0; }
+.frow .nm b { display: block; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.frow .nm small { display: block; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.frow .dt, .frow .sz { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.frow .sz { text-align: right; }
+.fhead { display: grid; grid-template-columns: 34px minmax(0, 1fr) 130px 80px; gap: 12px; padding: 8px 14px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
+.fhead span:last-child { text-align: right; }
+.fpanel { position: fixed; top: 55px; right: 0; bottom: 0; width: min(420px, 100vw); z-index: 35; background: var(--panel); border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(0,0,0,.18); padding: 18px; overflow-y: auto; }
+.fpanel .pv { background: var(--tile-bg); border-radius: 10px; min-height: 220px; display: grid; place-items: center; overflow: hidden; margin: 10px 0 14px; }
+.fpanel .pv img { max-width: 100%; max-height: 60vh; display: block; }
+.fpanel .pv p { color: var(--muted); padding: 20px; text-align: center; }
+.fpanel h4 { margin: 0; font: 600 17px/1.3 Fraunces, Georgia, serif; word-break: break-word; padding-right: 36px; }
+.fpanel dl { display: grid; grid-template-columns: 80px 1fr; gap: 6px 10px; font-size: 13px; margin: 0 0 16px; }
+.fpanel dt { color: var(--muted); }
+.fpanel dd { margin: 0; word-break: break-word; }
+.linklike { border: 0; background: none; padding: 0; color: var(--accent); text-align: left; text-decoration: underline; text-underline-offset: 2px; }
+.fpanel .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.fpanel .actions a { text-decoration: none; font-size: 13px; }
+.fpanel .actions a[aria-disabled="true"] { opacity: .45; pointer-events: none; }
+.fpanel .close { position: absolute; top: 14px; right: 14px; }
+.fmore { margin: 14px auto 0; display: block; }
+#fTitle { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; }
+#fTitle .crumb { border: 0; background: none; padding: 0; font: inherit; color: var(--muted); }
+#fTitle .crumb:last-child { color: var(--ink); }
+#fTitle .crumb:hover { color: var(--accent); }
+#fTitle .sep { color: var(--muted); font-size: .8em; }
+.frow.fdir .ic { color: #fff; }
+@media (max-width: 860px) {
+  .frow, .fhead { grid-template-columns: 30px minmax(0, 1fr) 70px; }
+  .frow .dt, .fhead .dt { display: none; }
+  .fpanel { top: 0; z-index: 55; }
+  .tabs button { padding: 5px 10px; }
+}
 .places-note { font-size: 12px; color: var(--muted); margin: 0 8px 6px; }
 
 .strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity; }
@@ -301,6 +342,9 @@ main { padding: 18px 24px 80px; min-width: 0; }
       <svg width="24" height="24" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="7" width="26" height="19" rx="4" fill="var(--accent)"/><circle cx="16" cy="16.5" r="5.5" fill="var(--bg)"/><rect x="10" y="4" width="12" height="5" rx="2" fill="var(--accent)"/></svg>
       <span class="js-title">Family Photos</span>
     </div>
+    <div class="seg tabs" id="tabs" role="tablist" aria-label="Section" hidden>
+      <button data-tab="photos" class="on" role="tab">Photos</button><button data-tab="files" role="tab">Files</button>
+    </div>
     <label class="search">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input type="search" id="q" placeholder="Search places, events, names, years…" autocomplete="off" aria-label="Search photos">
@@ -315,7 +359,7 @@ main { padding: 18px 24px 80px; min-width: 0; }
     </div>
   </header>
 
-  <div class="layout">
+  <div class="layout" id="photosLayout">
     <aside class="filters" id="filters">
       <div class="fgroup owner-box" id="ownerBox" hidden>
         <h3>Only you see this</h3>
@@ -395,7 +439,51 @@ main { padding: 18px 24px 80px; min-width: 0; }
       <div id="sentinel"></div>
     </main>
   </div>
+
+  <!-- Files tab (owner only): every document in EEE except the photo folders -->
+  <div class="layout" id="filesLayout" hidden>
+    <aside class="filters" id="fFilters">
+      <div class="fgroup">
+        <h3>Type</h3>
+        <div class="chips ftypes" id="fTypes"></div>
+      </div>
+      <div class="fgroup">
+        <h3>Folders</h3>
+        <div id="fFolders"></div>
+      </div>
+      <p style="font-size:12px;color:var(--muted)" id="fInfo"></p>
+    </aside>
+    <main>
+      <div class="summary">
+        <button class="btn mobile-only" id="fBtnFilters" style="padding:5px 12px">Filters</button>
+        <h2 id="fTitle">Files</h2>
+        <span class="count" id="fCount"></span>
+        <span class="spacer"></span>
+        <button class="btn" id="fDeep" hidden style="padding:5px 12px;font-size:13px">Search inside documents</button>
+        <div class="seg" id="fSort" role="group" aria-label="Sort files">
+          <button data-fsort="name">Name</button><button data-fsort="date">Date</button><button data-fsort="size">Size</button>
+        </div>
+      </div>
+      <div class="active-filters" id="fActive"></div>
+      <div id="fList"></div>
+      <button class="btn fmore" id="fMore" hidden>Show more</button>
+    </main>
+  </div>
 </div>
+
+<aside class="fpanel" id="fPanel" hidden aria-label="File details">
+  <button class="iconbtn close" id="fClose" aria-label="Close">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+  </button>
+  <h4 id="fpName"></h4>
+  <div class="pv" id="fpPreview"></div>
+  <dl id="fpMeta"></dl>
+  <div class="actions">
+    <a class="btn" id="fpOpen" target="_blank" rel="noopener" aria-disabled="true">Open in OneDrive</a>
+    <a class="btn" id="fpDl" aria-disabled="true">Download</a>
+    <a class="btn" id="fpFolder" target="_blank" rel="noopener" aria-disabled="true">Show in folder</a>
+  </div>
+</aside>
 
 <div class="scrim" id="scrim" hidden></div>
 <div class="selbar" id="selbar" hidden>
@@ -467,6 +555,7 @@ const CFG = Object.assign({
   title: 'Family Photos', clientId: '', authority: 'https://login.microsoftonline.com/consumers',
   shareUrl: '', ownerPath: 'EEE/Photos', folderName: 'Photos', skipFolders: ['Catalogs', 'Lightroom Presets'],
   privatePath: 'EEE/Photos-Priv',
+  filesPath: 'EEE',                                  // the Files tab (owner only) lists everything here except the photo folders
 }, window.PHOTO_CONFIG || {});
 const DEMO = new URLSearchParams(location.search).has('demo');
 const GRAPH = 'https://graph.microsoft.com/v1.0';
@@ -882,8 +971,11 @@ function readHash() {
   S.bounds = b.length === 4 && b.every(Number.isFinite) ? b : null;
   S.map = h.get('m') === '1' || !!S.bounds;
   $('#q').value = S.q;
+  TAB_WANTED = h.get('tab') === 'files' ? 'files' : 'photos';
+  F.q = h.get('fq') || ''; F.folder = h.get('ff') || ''; F.type = h.get('ft') || '';
 }
 function writeHash() {
+  if (TAB === 'files') return writeFilesHash();
   const h = new URLSearchParams();
   if (S.q) h.set('q', S.q);
   if (S.years.size) h.set('y', [...S.years].sort().join(','));
@@ -907,7 +999,10 @@ function passesBase(it) {
   const k = it.kind === 'video' ? 'video' : 'photo';
   if (!S.types.has(k)) return false;
   if (S.review && OWNER) return isClutter(it);
-  if (S.only) return CATS.find(c => c.key === S.only).has(it);
+  if (S.only) {
+    if (!CATS.find(c => c.key === S.only).has(it)) return false;
+    return S.only === 'priv' || !it.priv || S.show.priv;   // e.g. "Only Screenshots" = shared ones, unless Private is ticked
+  }
   return CATS.every(c => S.show[c.key] || !c.has(it));   // hide anything in a category that isn't ticked
 }
 function inBounds(it) {
@@ -925,7 +1020,7 @@ function apply(opts = {}) {
   const catCounts = Object.fromEntries(CATS.map(c => [c.key, 0]));
   for (const it of ITEMS) {
     if (!S.types.has(it.kind === 'video' ? 'video' : 'photo')) continue;
-    for (const c of CATS) if (c.has(it)) catCounts[c.key]++;
+    for (const c of CATS) if (c.has(it) && (c.key === 'priv' || !it.priv || S.show.priv)) catCounts[c.key]++;
   }
   const base = [], view = [];
   let folderTotal = 0, placeTotal = 0;
@@ -996,8 +1091,9 @@ function renderChrome({ view, yearCounts, folderCounts, folderTotal, placeCounts
   renderOwner();
   $('#cats').innerHTML = CATS.filter(c => !c.owner || OWNER).map(c => {
     const on = S.only === c.key, n = catCounts[c.key];
-    return `<div class="cat${S.only && !on ? ' dim' : ''}">
-      <label><input type="checkbox" data-show="${c.key}"${S.show[c.key] || on ? ' checked' : ''}${S.only ? ' disabled' : ''}>
+    const privSwitch = c.key === 'priv' && S.only && !on;   // stays usable: mixes private items into another "Only"
+    return `<div class="cat${S.only && !on && !privSwitch ? ' dim' : ''}">
+      <label><input type="checkbox" data-show="${c.key}"${S.show[c.key] || on ? ' checked' : ''}${S.only && !privSwitch ? ' disabled' : ''}>
         <span>${esc(c.label)}</span><span class="n">${fmtN(n)}</span></label>
       <button class="only${on ? ' on' : ''}" data-only="${c.key}" title="${on ? 'Back to all photos' : 'Show only ' + esc(c.label)}"${n || on ? '' : ' disabled'}>Only</button>
     </div>`;
@@ -1466,13 +1562,18 @@ function step(d) {
    Wiring
    ===================================================================== */
 function toggleDrawer(open) {
-  $('#filters').classList.toggle('open', open);
+  $('#filters').classList.toggle('open', open && TAB === 'photos');
+  $('#fFilters').classList.toggle('open', open && TAB === 'files');
   $('#scrim').hidden = !open;
 }
 
 function bindUI() {
   let qTimer = 0;
-  $('#q').addEventListener('input', e => { clearTimeout(qTimer); qTimer = setTimeout(() => { S.q = e.target.value.trim(); apply(); scrollTo(0, 0); }, 180); });
+  $('#q').addEventListener('input', e => { clearTimeout(qTimer); qTimer = setTimeout(() => {
+    if (TAB === 'files') { F.q = e.target.value.trim(); F.deep = null; renderFiles(); }
+    else { S.q = e.target.value.trim(); apply(); }
+    scrollTo(0, 0);
+  }, 180); });
 
   $('#typeChips').addEventListener('click', e => {
     const b = e.target.closest('[data-type]'); if (!b) return;
@@ -1549,7 +1650,7 @@ function bindUI() {
   $('#scrim').onclick = () => toggleDrawer(false);
   $('#btnSignIn').onclick = signIn;
   $('#btnSignOut').onclick = $('#btnSignOut2').onclick = $('#btnSignOut3').onclick = () => { if (DEMO) location.href = location.pathname; else signOut(); };
-  $('#btnRefresh').onclick = () => refresh(true, true);
+  $('#btnRefresh').onclick = () => TAB === 'files' ? refreshFiles(true) : refresh(true, true);
   $('#bannerBtn').onclick = () => { $('#banner').hidden = true; if (PENDING) { const p = PENDING; PENDING = null; useCatalog(p.raw, p.when); } };
   $('#btnLink').onclick = async () => {
     const link = $('#linkInput').value.trim();
@@ -1958,6 +2059,361 @@ function pickGroup(e) {
 }
 
 /* =====================================================================
+   Files tab (owner only): every file under EEE except Photos and Photos-Priv.
+   Read-only: preview, open in OneDrive, download. Nothing here is shared or cached for anyone else.
+   ===================================================================== */
+let TAB = 'photos', TAB_WANTED = 'photos';
+const F = { items: [], byId: new Map(), children: new Map(), root: null, when: 0, loaded: false, busy: false,
+            q: '', type: '', folder: '', sort: 'name', shown: 0, view: [], deep: null, deepQ: '', open: null };
+const FTYPES = [
+  ['pdf', 'PDF', '#c0392b', 'pdf'],
+  ['word', 'Word', '#2b579a', 'doc docx docm rtf odt pages'],
+  ['sheet', 'Spreadsheets', '#217346', 'xls xlsx xlsm csv ods numbers'],
+  ['slides', 'Slides', '#d24726', 'ppt pptx key odp'],
+  ['image', 'Images', '#8e44ad', 'jpg jpeg png gif webp heic heif bmp tif tiff svg'],
+  ['video', 'Videos', '#16a085', 'mp4 mov avi mkv wmv 3gp m4v webm'],
+  ['text', 'Text & web', '#7f8c8d', 'txt md html htm json xml eml msg log csv'],
+  ['archive', 'Archives', '#b9770e', 'zip rar 7z gz tar'],
+].map(([key, label, color, exts]) => ({ key, label, color, exts: new Set(exts.split(' ')) }));
+const OTHER = { key: 'other', label: 'Other', color: '#95a5a6' };
+const ftypeOf = ext => FTYPES.find(t => t.exts.has(ext)) || OTHER;
+
+function writeFilesHash() {
+  const h = new URLSearchParams({ tab: 'files' });
+  if (F.folder) h.set('ff', F.folder);
+  if (F.type) h.set('ft', F.type);
+  if (F.q) h.set('fq', F.q);
+  history.replaceState(null, '', '#' + h.toString());
+}
+
+function setTab(tab) {
+  if (tab === 'files' && !OWNER) tab = 'photos';
+  TAB = tab;
+  $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  $('#photosLayout').hidden = tab !== 'photos';
+  $('#filesLayout').hidden = tab !== 'files';
+  $('#fPanel').hidden = true;
+  toggleDrawer(false);
+  if (tab === 'files') {
+    selectMode = false; S.review = false; SEL.clear(); $('#selbar').hidden = true; document.body.classList.remove('selecting');
+    $('#mapPanel').hidden = true;
+    $('#q').placeholder = 'Search file and folder names…';
+    $('#q').value = F.q;
+    $('#btnRefresh').title = 'Check for new or changed files';
+    loadFiles();
+    writeFilesHash();
+  } else {
+    $('#q').placeholder = 'Search places, events, names, years…';
+    $('#q').value = S.q;
+    $('#btnRefresh').title = 'Check for new photos';
+    apply();
+  }
+  scrollTo(0, 0);
+}
+
+async function filesRoot() {
+  const path = (CFG.filesPath || 'EEE').split('/').map(encodeURIComponent).join('/');
+  const it = await graph(`/me/drive/root:/${path}?$select=id,name,parentReference`);
+  return { driveId: it.parentReference.driveId, id: it.id, name: it.name };
+}
+
+function crawlFiles(root, onProgress) {
+  const skipTop = new Set([CFG.folderName, PRIV].map(n => n.toLowerCase()));
+  const out = [], queue = [{ id: root.id, path: '' }];
+  let active = 0, folders = 0, failed = null;
+  async function list(f) {
+    let url = `/drives/${root.driveId}/items/${f.id}/children?$top=999&$select=id,name,size,folder,file,lastModifiedDateTime,fileSystemInfo`;
+    while (url) {
+      const r = await graph(url);
+      for (const c of r.value) {
+        if (c.name.startsWith('.')) continue;
+        if (c.folder) {
+          if (!f.path && skipTop.has(c.name.toLowerCase())) continue;     // photos live in the Photos tab
+          queue.push({ id: c.id, path: f.path ? f.path + '/' + c.name : c.name });
+        } else {
+          out.push([c.id, c.name, f.path, c.size || 0, (c.fileSystemInfo || {}).lastModifiedDateTime || c.lastModifiedDateTime || '']);
+        }
+      }
+      url = r['@odata.nextLink'];
+    }
+  }
+  return new Promise((resolve, reject) => {
+    const pump = () => {
+      if (failed) return;
+      if (!queue.length && !active) return resolve(out);
+      while (active < 6 && queue.length) {
+        const f = queue.shift(); active++;
+        list(f).then(() => { active--; folders++; onProgress(folders, out.length); pump(); })
+               .catch(e => { failed = e; reject(e); });
+      }
+    };
+    pump();
+  });
+}
+
+// Not real documents: Office lock files and Windows/Mac folder files
+const JUNK_FILE = /^(~\$|\.~lock)|^(desktop\.ini|thumbs\.db|\.ds_store)$/i;
+
+function useFiles(raw, when) {
+  F.when = when;
+  F.children = new Map();
+  F.items = raw.filter(r => !JUNK_FILE.test(r[1])).map(([id, name, dir, size, mod]) => {
+    const ext = extOf(name), type = ftypeOf(ext);
+    const prefixes = [];
+    let acc = '';
+    for (const seg of dir ? dir.split('/') : []) {
+      const parent = acc; acc = acc ? acc + '/' + seg : seg; prefixes.push(acc);
+      if (!F.children.has(parent)) F.children.set(parent, new Set());
+      F.children.get(parent).add(acc);
+    }
+    return { id, name, dir, size, mod: Date.parse(mod) || 0, ext, type: type.key, prefixes,
+             key: (dir + '/' + name).toLowerCase().replace(/[_\-.]/g, ' '), nkey: name.toLowerCase().replace(/[_\-.]/g, ' ') };
+  });
+  F.byId = new Map(F.items.map(it => [it.id, it]));
+  F.loaded = true;
+  renderFiles();
+}
+
+async function loadFiles() {
+  if (DEMO && !F.loaded) {                                // preview with a local listing (make_demo.py --files)
+    try { useFiles(await (await fetch('demo-files.json')).json(), Date.now()); }
+    catch { $('#fList').innerHTML = '<div class="empty"><h3>No demo file list</h3><p>Run make_demo.py to create demo-files.json.</p></div>'; }
+    return;
+  }
+  if (F.loaded) { renderFiles(); if (Date.now() - F.when > REFRESH_AFTER) refreshFiles(false); return; }
+  if (!F.root) {
+    try { F.root = await filesRoot(); } catch (e) { $('#fList').innerHTML = `<div class="empty"><h3>Couldn't open ${esc(CFG.filesPath)}</h3><p>${esc(e.message)}</p></div>`; return; }
+  }
+  const cached = await idb.get('files1:' + F.root.id);
+  if (cached && cached.raw) { useFiles(cached.raw, cached.when); if (Date.now() - cached.when > REFRESH_AFTER) refreshFiles(false); }
+  else refreshFiles(false, true);
+}
+
+async function refreshFiles(manual, first = false) {
+  if (F.busy) return;
+  F.busy = true;
+  const btn = $('#btnRefresh'); btn.classList.add('spin');
+  if (first) $('#fList').innerHTML = `<div class="empty"><h3>Listing your files…</h3><p id="fProgress">Looking through ${esc(CFG.filesPath)}. This takes a minute the first time.</p></div>`;
+  try {
+    F.root = F.root || await filesRoot();
+    const raw = await crawlFiles(F.root, (folders, found) => {
+      const t = `${fmtN(found)} files found in ${fmtN(folders)} folders…`;
+      if ($('#fProgress')) $('#fProgress').textContent = t; else btn.title = 'Updating: ' + t;
+    });
+    const when = Date.now();
+    await idb.set('files1:' + F.root.id, { raw, when });
+    const before = F.items.length;
+    useFiles(raw, when);
+    if (manual) {
+      const d = raw.length - before;
+      $('#bannerText').textContent = d > 0 ? `${fmtN(d)} new file${d === 1 ? '' : 's'}` : d < 0 ? `${fmtN(-d)} file${d === -1 ? '' : 's'} removed` : 'Everything is up to date';
+      $('#bannerBtn').hidden = true; $('#banner').hidden = false;
+      setTimeout(() => { $('#banner').hidden = true; $('#bannerBtn').hidden = false; }, 2500);
+    }
+  } catch (e) {
+    if (first) $('#fList').innerHTML = `<div class="empty"><h3>Couldn't list your files</h3><p>${esc(e.message)}</p></div>`;
+    else console.warn('Files refresh failed', e);
+  } finally { F.busy = false; btn.classList.remove('spin'); btn.title = 'Check for new or changed files'; }
+}
+
+function fileAge() {
+  if (!F.when) return '';
+  const m = Math.round((Date.now() - F.when) / 60000);
+  return `${fmtN(F.items.length)} files · updated ${m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' days ago'}.`;
+}
+
+function renderFiles() {
+  if (!F.loaded) return;
+  const tokens = F.q.toLowerCase().replace(/[_\-.]/g, ' ').split(/\s+/).filter(Boolean);
+  const searching = !!(tokens.length || F.deep);           // searching looks through subfolders too; browsing doesn't
+  const typeCounts = new Map(), folderCounts = new Map(), folderSize = new Map(), folderMod = new Map();
+  let folderTotal = 0;
+  const files = [];
+  for (const it of F.items) {
+    const qOk = F.deep ? F.deep.has(it.id) : tokens.every(t => it.key.includes(t));
+    const inTree = !F.folder || it.dir === F.folder || it.dir.startsWith(F.folder + '/');
+    const fOk = searching ? inTree : it.dir === F.folder;
+    const tOk = !F.type || it.type === F.type;
+    if (qOk && inTree) typeCounts.set(it.type, (typeCounts.get(it.type) || 0) + 1);   // counts include subfolders
+    if (qOk && tOk) {
+      folderTotal++;
+      for (const p of it.prefixes) {
+        folderCounts.set(p, (folderCounts.get(p) || 0) + 1);
+        folderSize.set(p, (folderSize.get(p) || 0) + it.size);
+        folderMod.set(p, Math.max(folderMod.get(p) || 0, it.mod));
+      }
+    }
+    if (qOk && fOk && tOk) files.push(it);
+  }
+  const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+  const cmp = { name: byName, date: (a, b) => b.mod - a.mod, size: (a, b) => b.size - a.size }[F.sort];
+  // With a name search, files whose own name matches come before files that only sit in a matching folder
+  const nameHit = it => tokens.length && !F.deep && tokens.every(t => it.nkey.includes(t)) ? 0 : 1;
+  files.sort((a, b) => nameHit(a) - nameHit(b) || cmp(a, b) || byName(a, b));
+
+  // Browsing: the folder's own subfolders first (with what's inside them), then its files
+  const dirs = searching ? [] : [...(F.children.get(F.folder) || [])]
+    .filter(p => folderCounts.get(p))
+    .map(p => ({ isDir: true, path: p, name: p.slice(F.folder ? F.folder.length + 1 : 0), count: folderCounts.get(p), size: folderSize.get(p), mod: folderMod.get(p) }))
+    .sort((a, b) => cmp(a, b) || byName(a, b));
+  F.rows = [...dirs, ...files];
+  writeFilesHash();
+
+  // Breadcrumb: All of EEE › Family Documents › Passports
+  const segs = F.folder ? F.folder.split('/') : [];
+  const crumbs = [`<button class="crumb" data-fcrumb="">${esc(CFG.filesPath)}</button>`]
+    .concat(segs.map((sg, i) => `<button class="crumb" data-fcrumb="${esc(segs.slice(0, i + 1).join('/'))}">${esc(sg)}</button>`));
+  $('#fTitle').innerHTML = crumbs.join('<span class="sep">›</span>');
+  $('#fCount').textContent = searching
+    ? `${fmtN(files.length)} ${F.deep ? 'found inside documents' : 'matching'}${F.folder ? ' (incl. subfolders)' : ''}`
+    : [dirs.length && `${fmtN(dirs.length)} folder${dirs.length === 1 ? '' : 's'}`, `${fmtN(files.length)} file${files.length === 1 ? '' : 's'}`].filter(Boolean).join(' · ');
+  $('#fDeep').hidden = !F.q || !!F.deep;
+  $('#fDeep').textContent = `Search inside documents for “${F.q}”`;
+  $$('#fSort button').forEach(b => b.classList.toggle('on', b.dataset.fsort === F.sort));
+
+  const chips = [];
+  if (F.deep) chips.push(`<button class="chip" data-fclear="deep"><b>Inside documents</b> ${esc(F.deepQ)} ✕</button>`);
+  else if (F.q) chips.push(`<button class="chip" data-fclear="q"><b>Name</b> ${esc(F.q)} ✕</button>`);
+  if (F.type) chips.push(`<button class="chip" data-fclear="type"><b>Type</b> ${esc((FTYPES.find(t => t.key === F.type) || OTHER).label)} ✕</button>`);
+  $('#fActive').innerHTML = chips.join(''); $('#fActive').hidden = !chips.length;
+
+  const all = [...typeCounts.values()].reduce((a, b) => a + b, 0);
+  $('#fTypes').innerHTML = `<button class="chip${F.type ? '' : ' on'}" data-ftype="">All<small>${fmtN(all)}</small></button>`
+    + [...FTYPES, OTHER].filter(t => typeCounts.get(t.key) || F.type === t.key)
+      .map(t => `<button class="chip${F.type === t.key ? ' on' : ''}" data-ftype="${t.key}">${esc(t.label)}<small>${fmtN(typeCounts.get(t.key) || 0)}</small></button>`).join('');
+  $('#fFolders').innerHTML = treeHTML({ children: F.children, counts: folderCounts, sel: F.folder, total: folderTotal, allLabel: 'All of ' + esc(CFG.filesPath),
+    attr: 'data-ff', sort: (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }), label: s => s })
+    .replace(/<span class="fsel"[^>]*>Select<\/span>/g, '');
+  $('#fInfo').textContent = fileAge();
+
+  F.shown = 0;
+  $('#fList').innerHTML = F.rows.length
+    ? `<div class="flist"><div class="fhead"><span></span><span>Name</span><span class="dt">Modified</span><span>Size</span></div><div id="fRows"></div></div>`
+    : `<div class="empty"><h3>${searching ? 'No files found' : 'This folder is empty'}</h3><p>${F.q && !F.deep ? 'Try <b>Search inside documents</b>, or clear some filters.' : F.type ? 'No files of this type here. Try another type.' : ''}</p></div>`;
+  moreFiles();
+}
+
+const FOLDER_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4h4l2 2.5h7A2.5 2.5 0 0 1 21 9v8.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>';
+const shortDate = t => t ? new Date(t).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+
+function moreFiles() {
+  const box = $('#fRows'); if (!box) { $('#fMore').hidden = true; return; }
+  const end = Math.min(F.rows.length, F.shown + 200);
+  let html = '';
+  for (let i = F.shown; i < end; i++) {
+    const it = F.rows[i];
+    if (it.isDir) {
+      html += `<button class="frow fdir" data-fdir="${esc(it.path)}">
+        <span class="ic" style="background:#d8a330">${FOLDER_ICON}</span>
+        <span class="nm"><b>${esc(it.name)}</b><small>${fmtN(it.count)} file${it.count === 1 ? '' : 's'}${F.type ? ' of this type' : ''}</small></span>
+        <span class="dt">${shortDate(it.mod)}</span>
+        <span class="sz">${it.size ? fmtBytes(it.size) : ''}</span></button>`;
+      continue;
+    }
+    const t = FTYPES.find(x => x.key === it.type) || OTHER;
+    const where = it.dir === F.folder ? '' : it.dir || CFG.filesPath;   // only shown for search results from subfolders
+    html += `<button class="frow${F.open === it.id ? ' on' : ''}" data-fid="${esc(it.id)}">
+      <span class="ic" style="background:${t.color}">${esc((it.ext || '?').slice(0, 4).toUpperCase())}</span>
+      <span class="nm"><b>${esc(it.name)}</b>${where ? `<small>${esc(where)}</small>` : ''}</span>
+      <span class="dt">${shortDate(it.mod)}</span>
+      <span class="sz">${it.size ? fmtBytes(it.size) : ''}</span></button>`;
+  }
+  box.insertAdjacentHTML('beforeend', html);
+  F.shown = end;
+  $('#fMore').hidden = F.shown >= F.rows.length;
+  $('#fMore').textContent = `Show more (${fmtN(F.rows.length - F.shown)} left)`;
+}
+
+async function deepSearch() {
+  const q = F.q; if (!q || !F.root) return;
+  $('#fDeep').textContent = 'Searching…'; $('#fDeep').disabled = true;
+  try {
+    const ids = new Set();
+    let url = `/drives/${F.root.driveId}/items/${F.root.id}/search(q='${encodeURIComponent(q.replace(/'/g, "''"))}')?$top=200&$select=id`;
+    for (let page = 0; url && page < 10; page++) {
+      const r = await graph(url);
+      for (const v of r.value) if (F.byId.has(v.id)) ids.add(v.id);     // only files in this tab (not photos)
+      url = r['@odata.nextLink'];
+    }
+    F.deep = ids; F.deepQ = q;
+    renderFiles();
+  } catch (e) { alert('Search failed: ' + e.message); }
+  finally { $('#fDeep').disabled = false; }
+}
+
+function openFile(it) {
+  F.open = it.id;
+  $$('#fRows .frow').forEach(r => r.classList.toggle('on', r.dataset.fid === it.id));
+  const panel = $('#fPanel'), pv = $('#fpPreview');
+  panel.hidden = false;
+  $('#fpName').textContent = it.name;
+  const t = FTYPES.find(x => x.key === it.type) || OTHER;
+  $('#fpMeta').innerHTML = [
+    ['Folder', `<button class="linklike" data-fgoto="${esc(it.dir)}">${esc(it.dir || CFG.filesPath)}</button>`],
+    ['Type', `${esc(t.label)} (.${esc(it.ext)})`],
+    ['Modified', it.mod ? new Date(it.mod).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—'],
+    ['Size', it.size ? fmtBytes(it.size) : '—'],
+  ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+  pv.innerHTML = '<p>Loading preview…</p>';
+  // OneDrive renders a picture of the first page for PDFs, Office files and images
+  thumb(it, 'big').then(u => {
+    if (F.open !== it.id) return;
+    pv.innerHTML = u ? `<img alt="Preview of ${esc(it.name)}" src="${esc(u)}">` : '<p>No preview for this kind of file. Use Open in OneDrive.</p>';
+  }).catch(() => { if (F.open === it.id) pv.innerHTML = '<p>No preview available.</p>'; });
+  const op = $('#fpOpen'), dl = $('#fpDl'), fo = $('#fpFolder');
+  for (const a of [op, dl, fo]) { a.removeAttribute('href'); a.setAttribute('aria-disabled', 'true'); }
+  details(it).then(d => {
+    if (F.open !== it.id) return;
+    op.href = d.webUrl;
+    dl.href = d['@microsoft.graph.downloadUrl']; dl.download = d.name;
+    const cid = new URL(d.webUrl).searchParams.get('cid') || (d.parentReference && d.parentReference.driveId);
+    const parent = d.parentReference && d.parentReference.id;
+    if (cid && parent) fo.href = `https://onedrive.live.com/?id=${encodeURIComponent(parent)}&cid=${encodeURIComponent(cid)}`;
+    for (const a of [op, dl, fo]) if (a.href) a.setAttribute('aria-disabled', 'false');
+  }).catch(e => {
+    if (F.open !== it.id) return;
+    if (e.status === 404) { pv.innerHTML = '<p>This file was moved or deleted. Press ⟳ to update the list.</p>'; }
+  });
+}
+
+function bindFilesUI() {
+  $('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) setTab(b.dataset.tab); });
+  $('#fTypes').addEventListener('click', e => { const b = e.target.closest('[data-ftype]'); if (!b) return; F.type = b.dataset.ftype; renderFiles(); });
+  $('#fFolders').addEventListener('click', e => {
+    const b = e.target.closest('[data-ff]'); if (!b) return;
+    F.folder = b.dataset.ff; renderFiles(); scrollTo(0, 0);
+    if (!b.dataset.ff || !F.children.has(b.dataset.ff)) toggleDrawer(false);
+  });
+  $('#fSort').addEventListener('click', e => { const b = e.target.closest('[data-fsort]'); if (!b) return; F.sort = b.dataset.fsort; renderFiles(); });
+  $('#fActive').addEventListener('click', e => {
+    const b = e.target.closest('[data-fclear]'); if (!b) return;
+    const c = b.dataset.fclear;
+    if (c === 'q' || c === 'deep') { F.q = ''; F.deep = null; $('#q').value = ''; }
+    if (c === 'type') F.type = '';
+    if (c === 'folder') F.folder = '';
+    renderFiles();
+  });
+  $('#fDeep').onclick = deepSearch;
+  $('#fMore').onclick = moreFiles;
+  $('#fBtnFilters').onclick = () => toggleDrawer(true);
+  $('#fList').addEventListener('click', e => {
+    const d = e.target.closest('[data-fdir]');
+    if (d) { F.folder = d.dataset.fdir; $('#fPanel').hidden = true; renderFiles(); scrollTo(0, 0); return; }
+    const r = e.target.closest('[data-fid]'); if (r) openFile(F.byId.get(r.dataset.fid));
+  });
+  $('#fTitle').addEventListener('click', e => {
+    const c = e.target.closest('[data-fcrumb]'); if (!c) return;
+    F.folder = c.dataset.fcrumb; renderFiles(); scrollTo(0, 0);
+  });
+  $('#fClose').onclick = () => { $('#fPanel').hidden = true; F.open = null; $$('#fRows .frow.on').forEach(r => r.classList.remove('on')); };
+  $('#fpMeta').addEventListener('click', e => {
+    const b = e.target.closest('[data-fgoto]'); if (!b) return;
+    F.folder = b.dataset.fgoto; F.q = ''; F.deep = null; $('#q').value = ''; $('#fPanel').hidden = true; renderFiles(); scrollTo(0, 0);
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#fPanel').hidden) $('#fClose').click(); });
+}
+
+/* =====================================================================
    Catalog lifecycle
    ===================================================================== */
 let BUSY = false, PENDING = null;
@@ -2038,17 +2494,20 @@ async function main() {
   bindUI();
   bindOwnerUI();
   bindTagUI();
+  bindFilesUI();
   readHash();
 
   if (DEMO) {
     ROOT = { driveId: 'demo', id: 'demo', name: 'Photos' };
     OWNER = new URLSearchParams(location.search).has('owner');   // preview the owner tools (actions need a real sign-in)
+    $('#tabs').hidden = !OWNER;
     $('#whoName').textContent = 'Demo'; $('#avatar').textContent = 'D'; $('#btnSignOut').textContent = $('#btnSignOut3').textContent = 'Exit demo';
     loading('Loading demo…', 'Reading demo.json');
     try {
       const f = new URLSearchParams(location.search).get('demo');
       const raw = await (await fetch(/^[\w-]+\.json$/.test(f) ? f : 'demo.json')).json();
       useCatalog(raw, Date.now());
+      if (OWNER && TAB_WANTED === 'files') setTab('files');
     } catch (e) { fail(new Error('demo.json not found. Run make_demo.py to create it.')); }
     return;
   }
@@ -2068,8 +2527,10 @@ async function main() {
     ROOT = await findRoot();
     if (!ROOT) return show('scr-link');
     await detectOwner();
+    $('#tabs').hidden = !OWNER;                           // the Files tab is only for the owner
     await loadTags();
     await startCatalog();
+    if (OWNER && TAB_WANTED === 'files') setTab('files');
   } catch (e) { fail(e); }
 }
 
