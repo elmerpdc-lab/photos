@@ -555,7 +555,8 @@ const CFG = Object.assign({
   title: 'Family Photos', clientId: '', authority: 'https://login.microsoftonline.com/consumers',
   shareUrl: '', ownerPath: 'EEE/Photos', folderName: 'Photos', skipFolders: ['Catalogs', 'Lightroom Presets'],
   privatePath: 'EEE/Photos-Priv',
-  filesPath: 'EEE',                                  // the Files tab (owner only) lists everything here except the photo folders
+  filesPath: 'EEE',                                  // the owner's Files tab lists everything here except the photo folders
+  familyFolders: [],                                 // folders shared with the family: [{ name, shareUrl }] (shown in their Files tab)
 }, window.PHOTO_CONFIG || {});
 const DEMO = new URLSearchParams(location.search).has('demo');
 const GRAPH = 'https://graph.microsoft.com/v1.0';
@@ -2086,8 +2087,13 @@ function writeFilesHash() {
   history.replaceState(null, '', '#' + h.toString());
 }
 
+// Owner: all of EEE. Family: only the folders listed in familyFolders (shared with them in OneDrive).
+const familyFolders = () => (CFG.familyFolders || []).filter(f => f && f.shareUrl);
+const filesAllowed = () => OWNER || familyFolders().length > 0;
+const filesLabel = () => OWNER ? CFG.filesPath : 'Shared files';
+
 function setTab(tab) {
-  if (tab === 'files' && !OWNER) tab = 'photos';
+  if (tab === 'files' && !filesAllowed()) tab = 'photos';
   TAB = tab;
   $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   $('#photosLayout').hidden = tab !== 'photos';
@@ -2111,15 +2117,24 @@ function setTab(tab) {
   scrollTo(0, 0);
 }
 
-async function filesRoot() {
-  const path = (CFG.filesPath || 'EEE').split('/').map(encodeURIComponent).join('/');
-  const it = await graph(`/me/drive/root:/${path}?$select=id,name,parentReference`);
-  return { driveId: it.parentReference.driveId, id: it.id, name: it.name };
+async function filesRoots() {
+  if (OWNER) {
+    const path = (CFG.filesPath || 'EEE').split('/').map(encodeURIComponent).join('/');
+    const it = await graph(`/me/drive/root:/${path}?$select=id,name,parentReference`);
+    return [{ driveId: it.parentReference.driveId, id: it.id, name: it.name, prefix: '', skipPhotos: true }];
+  }
+  const roots = [];
+  for (const f of familyFolders()) {
+    try { const r = await resolveLink(f.shareUrl); roots.push({ ...r, prefix: f.name || r.name, skipPhotos: false }); }
+    catch (e) { console.warn('Shared folder not available:', f.name, e.message); }   // not shared with this account
+  }
+  if (!roots.length) throw new Error('None of the shared folders could be opened with this account.');
+  return roots;
 }
 
 function crawlFiles(root, onProgress) {
-  const skipTop = new Set([CFG.folderName, PRIV].map(n => n.toLowerCase()));
-  const out = [], queue = [{ id: root.id, path: '' }];
+  const skipTop = new Set(root.skipPhotos ? [CFG.folderName, PRIV].map(n => n.toLowerCase()) : []);
+  const out = [], queue = [{ id: root.id, path: root.prefix }];
   let active = 0, folders = 0, failed = null;
   async function list(f) {
     let url = `/drives/${root.driveId}/items/${f.id}/children?$top=999&$select=id,name,size,folder,file,lastModifiedDateTime,fileSystemInfo`;
@@ -2128,7 +2143,7 @@ function crawlFiles(root, onProgress) {
       for (const c of r.value) {
         if (c.name.startsWith('.')) continue;
         if (c.folder) {
-          if (!f.path && skipTop.has(c.name.toLowerCase())) continue;     // photos live in the Photos tab
+          if (f.path === root.prefix && skipTop.has(c.name.toLowerCase())) continue;     // photos live in the Photos tab
           queue.push({ id: c.id, path: f.path ? f.path + '/' + c.name : c.name });
         } else {
           out.push([c.id, c.name, f.path, c.size || 0, (c.fileSystemInfo || {}).lastModifiedDateTime || c.lastModifiedDateTime || '']);
@@ -2181,27 +2196,30 @@ async function loadFiles() {
     return;
   }
   if (F.loaded) { renderFiles(); if (Date.now() - F.when > REFRESH_AFTER) refreshFiles(false); return; }
-  if (!F.root) {
-    try { F.root = await filesRoot(); } catch (e) { $('#fList').innerHTML = `<div class="empty"><h3>Couldn't open ${esc(CFG.filesPath)}</h3><p>${esc(e.message)}</p></div>`; return; }
+  if (!F.roots) {
+    try { F.roots = await filesRoots(); } catch (e) { $('#fList').innerHTML = `<div class="empty"><h3>Couldn't open ${esc(filesLabel())}</h3><p>${esc(e.message)}</p></div>`; return; }
   }
-  const cached = await idb.get('files1:' + F.root.id);
+  const cached = await idb.get(filesKey());
   if (cached && cached.raw) { useFiles(cached.raw, cached.when); if (Date.now() - cached.when > REFRESH_AFTER) refreshFiles(false); }
   else refreshFiles(false, true);
 }
+
+const filesKey = () => 'files2:' + F.roots.map(r => r.id).join('+');
 
 async function refreshFiles(manual, first = false) {
   if (F.busy) return;
   F.busy = true;
   const btn = $('#btnRefresh'); btn.classList.add('spin');
-  if (first) $('#fList').innerHTML = `<div class="empty"><h3>Listing your files…</h3><p id="fProgress">Looking through ${esc(CFG.filesPath)}. This takes a minute the first time.</p></div>`;
+  if (first) $('#fList').innerHTML = `<div class="empty"><h3>Listing the files…</h3><p id="fProgress">Looking through ${esc(filesLabel())}. This takes a minute the first time.</p></div>`;
   try {
-    F.root = F.root || await filesRoot();
-    const raw = await crawlFiles(F.root, (folders, found) => {
-      const t = `${fmtN(found)} files found in ${fmtN(folders)} folders…`;
+    F.roots = F.roots || await filesRoots();
+    const raw = [];
+    for (const root of F.roots) raw.push(...await crawlFiles(root, (folders, found) => {
+      const t = `${fmtN(raw.length + found)} files found…`;
       if ($('#fProgress')) $('#fProgress').textContent = t; else btn.title = 'Updating: ' + t;
-    });
+    }));
     const when = Date.now();
-    await idb.set('files1:' + F.root.id, { raw, when });
+    await idb.set(filesKey(), { raw, when });
     const before = F.items.length;
     useFiles(raw, when);
     if (manual) {
@@ -2261,7 +2279,7 @@ function renderFiles() {
 
   // Breadcrumb: All of EEE › Family Documents › Passports
   const segs = F.folder ? F.folder.split('/') : [];
-  const crumbs = [`<button class="crumb" data-fcrumb="">${esc(CFG.filesPath)}</button>`]
+  const crumbs = [`<button class="crumb" data-fcrumb="">${esc(filesLabel())}</button>`]
     .concat(segs.map((sg, i) => `<button class="crumb" data-fcrumb="${esc(segs.slice(0, i + 1).join('/'))}">${esc(sg)}</button>`));
   $('#fTitle').innerHTML = crumbs.join('<span class="sep">›</span>');
   $('#fCount').textContent = searching
@@ -2281,7 +2299,7 @@ function renderFiles() {
   $('#fTypes').innerHTML = `<button class="chip${F.type ? '' : ' on'}" data-ftype="">All<small>${fmtN(all)}</small></button>`
     + [...FTYPES, OTHER].filter(t => typeCounts.get(t.key) || F.type === t.key)
       .map(t => `<button class="chip${F.type === t.key ? ' on' : ''}" data-ftype="${t.key}">${esc(t.label)}<small>${fmtN(typeCounts.get(t.key) || 0)}</small></button>`).join('');
-  $('#fFolders').innerHTML = treeHTML({ children: F.children, counts: folderCounts, sel: F.folder, total: folderTotal, allLabel: 'All of ' + esc(CFG.filesPath),
+  $('#fFolders').innerHTML = treeHTML({ children: F.children, counts: folderCounts, sel: F.folder, total: folderTotal, allLabel: OWNER ? 'All of ' + esc(filesLabel()) : 'All shared files',
     attr: 'data-ff', sort: (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }), label: s => s })
     .replace(/<span class="fsel"[^>]*>Select<\/span>/g, '');
   $('#fInfo').textContent = fileAge();
@@ -2311,7 +2329,7 @@ function moreFiles() {
       continue;
     }
     const t = FTYPES.find(x => x.key === it.type) || OTHER;
-    const where = it.dir === F.folder ? '' : it.dir || CFG.filesPath;   // only shown for search results from subfolders
+    const where = it.dir === F.folder ? '' : it.dir || filesLabel();   // only shown for search results from subfolders
     html += `<button class="frow${F.open === it.id ? ' on' : ''}" data-fid="${esc(it.id)}">
       <span class="ic" style="background:${t.color}">${esc((it.ext || '?').slice(0, 4).toUpperCase())}</span>
       <span class="nm"><b>${esc(it.name)}</b>${where ? `<small>${esc(where)}</small>` : ''}</span>
@@ -2325,15 +2343,17 @@ function moreFiles() {
 }
 
 async function deepSearch() {
-  const q = F.q; if (!q || !F.root) return;
+  const q = F.q; if (!q || !F.roots) return;
   $('#fDeep').textContent = 'Searching…'; $('#fDeep').disabled = true;
   try {
     const ids = new Set();
-    let url = `/drives/${F.root.driveId}/items/${F.root.id}/search(q='${encodeURIComponent(q.replace(/'/g, "''"))}')?$top=200&$select=id`;
-    for (let page = 0; url && page < 10; page++) {
-      const r = await graph(url);
-      for (const v of r.value) if (F.byId.has(v.id)) ids.add(v.id);     // only files in this tab (not photos)
-      url = r['@odata.nextLink'];
+    for (const root of F.roots) {
+      let url = `/drives/${root.driveId}/items/${root.id}/search(q='${encodeURIComponent(q.replace(/'/g, "''"))}')?$top=200&$select=id`;
+      for (let page = 0; url && page < 10; page++) {
+        const r = await graph(url);
+        for (const v of r.value) if (F.byId.has(v.id)) ids.add(v.id);     // only files in this tab (not photos)
+        url = r['@odata.nextLink'];
+      }
     }
     F.deep = ids; F.deepQ = q;
     renderFiles();
@@ -2349,7 +2369,7 @@ function openFile(it) {
   $('#fpName').textContent = it.name;
   const t = FTYPES.find(x => x.key === it.type) || OTHER;
   $('#fpMeta').innerHTML = [
-    ['Folder', `<button class="linklike" data-fgoto="${esc(it.dir)}">${esc(it.dir || CFG.filesPath)}</button>`],
+    ['Folder', `<button class="linklike" data-fgoto="${esc(it.dir)}">${esc(it.dir || filesLabel())}</button>`],
     ['Type', `${esc(t.label)} (.${esc(it.ext)})`],
     ['Modified', it.mod ? new Date(it.mod).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—'],
     ['Size', it.size ? fmtBytes(it.size) : '—'],
@@ -2527,10 +2547,10 @@ async function main() {
     ROOT = await findRoot();
     if (!ROOT) return show('scr-link');
     await detectOwner();
-    $('#tabs').hidden = !OWNER;                           // the Files tab is only for the owner
+    $('#tabs').hidden = !filesAllowed();                  // owner: all of EEE; family: the folders shared with them
     await loadTags();
     await startCatalog();
-    if (OWNER && TAB_WANTED === 'files') setTab('files');
+    if (filesAllowed() && TAB_WANTED === 'files') setTab('files');
   } catch (e) { fail(e); }
 }
 
