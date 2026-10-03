@@ -388,7 +388,7 @@ main { padding: 18px 24px 80px; min-width: 0; }
         <h3>Folders</h3>
         <div id="folders"></div>
       </div>
-      <div class="fgroup">
+      <div class="fgroup" id="catsGroup">
         <h3>More categories</h3>
         <p class="places-note">Hidden unless you tick them. <b>Only</b> shows that category and nothing else.</p>
         <div id="cats"></div>
@@ -932,7 +932,10 @@ async function runThumbBatch(batch) {
       retry.push(j);
     }
     else if (r.status === 400 && s.startsWith('c')) { TH.custom = false; retry.push(j); }
-    else j.resolve(null);
+    else {
+      if (r.status === 404 || r.status === 403) forgetItems([j.it]);   // moved, made private or deleted since the catalog was built
+      j.resolve(null);
+    }
   }
   if (retry.length) { if (THROTTLE.until <= Date.now()) await sleep(1500); TH.q.unshift(...retry); }
 }
@@ -1090,7 +1093,9 @@ function renderChrome({ view, yearCounts, folderCounts, folderTotal, placeCounts
   $$('#sizeSeg button').forEach(b => b.classList.toggle('on', b.dataset.size === S.size));
   $$('#typeChips .chip').forEach(b => b.classList.toggle('on', S.types.has(b.dataset.type)));
   renderOwner();
-  $('#cats').innerHTML = CATS.filter(c => !c.owner || OWNER).map(c => {
+  const shownCats = CATS.filter(c => (!c.owner || OWNER) && (catCounts[c.key] || S.only === c.key || S.show[c.key]));
+  $('#catsGroup').hidden = !shownCats.length;
+  $('#cats').innerHTML = shownCats.map(c => {
     const on = S.only === c.key, n = catCounts[c.key];
     const privSwitch = c.key === 'priv' && S.only && !on;   // stays usable: mixes private items into another "Only"
     return `<div class="cat${S.only && !on && !privSwitch ? ' dim' : ''}">
@@ -2482,9 +2487,17 @@ async function refresh(background, manual = false) {
       const added = raw.filter(r => !old.has(r[0])).length;
       const removed = ITEMS.length - (raw.length - added);
       if (added || removed) {
-        PENDING = { raw, when };
-        $('#bannerText').textContent = added ? `${fmtN(added)} new photo${added === 1 ? '' : 's'} found` : 'The catalog has changed';
-        $('#banner').hidden = false;
+        const y = scrollY;
+        RAW = raw; CATALOG_WHEN = when;
+        ITEMS = processCatalog(raw);
+        apply();
+        while (rendered < VIEW.length && document.documentElement.scrollHeight < y + innerHeight) renderMore();
+        scrollTo(0, y);
+        resolvePlaces();
+        $('#catalogInfo').textContent = catalogAge();
+        $('#bannerText').textContent = 'Updated: ' + [added && `${fmtN(added)} new`, removed > 0 && `${fmtN(removed)} removed`].filter(Boolean).join(', ');
+        $('#bannerBtn').hidden = true; $('#banner').hidden = false;
+        setTimeout(() => { $('#banner').hidden = true; $('#bannerBtn').hidden = false; }, 4000);
       } else {
         CATALOG_WHEN = when;
         $('#catalogInfo').textContent = catalogAge();
