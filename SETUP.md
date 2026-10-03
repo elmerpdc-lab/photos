@@ -84,8 +84,9 @@ Send that link to your family. On phones, they can use **Share → Add to Home S
   to zoom in, click a pin to open that photo, or pan to a spot and tap **Show photos in this area**.
   In the viewer, a photo's place links to its filter, and **map** opens the exact spot.
 - **On this day:** photos taken on today's date in past years.
-- **More categories:** screenshots, wallpapers, Facebook/Messenger/WhatsApp images, downloads, and RAW (`.CR2`)
-  copies of JPEGs are hidden by default. Their checkboxes are at the bottom of the left panel: tick one to mix it
+- **More categories:** screenshots, wallpapers, Facebook/Messenger/WhatsApp images and downloads are hidden by
+  default. RAW (`.CR2`) files are always shown, even when there's a JPG of the same shot; the RAW copies of JPGs were
+  moved to `Photos-Priv` on 2026-10-03, see `raw-pair-moves.csv`. Their checkboxes are at the bottom of the left panel: tick one to mix it
   back in, or press **Only** to see that category and nothing else. The folders, places and timeline then shrink to
   match. Press **Only** again, or the ✕ on its chip, to go back. Document scans (Office Lens, receipts, IDs) are a
   category too.

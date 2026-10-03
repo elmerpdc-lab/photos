@@ -575,7 +575,6 @@ const CATS = [
   { key: 'social',    label: 'Facebook, Messenger & chats', has: it => !!(it.cat & CAT.SOCIAL) },
   { key: 'downloads', label: 'Downloads',                   has: it => !!(it.cat & CAT.DL) },
   { key: 'docs',      label: 'Documents & scans',           has: it => !!(it.cat & CAT.DOC) },
-  { key: 'rawTwins',  label: 'RAW copies of JPEGs',         has: it => it.twin },
   { key: 'priv',      label: 'Private (only you)',          has: it => it.priv, owner: true },
 ];
 const catLabel = key => CATS.find(c => c.key === key).label;
@@ -954,7 +953,8 @@ function details(it) {
 const S = {
   q: '', years: new Set(), folder: '', place: '', bounds: null, map: false, sort: 'new',
   types: new Set(store.get('types', ['photo', 'video'])),
-  show: Object.assign({ screens: false, walls: false, social: false, downloads: false, rawTwins: false }, store.get('show', {})),
+  // JPG and RAW copies of a photo are both shown (hiding the RAW made it pop up after moving the JPG)
+  show: Object.assign({ screens: false, walls: false, social: false, downloads: false }, store.get('show', {})),
   only: '',
   size: store.get('size', 'm'),
   seed: 1,
