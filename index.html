@@ -1053,6 +1053,10 @@ function apply(opts = {}) {
   }
   const unchanged = opts.keepGrid && view.length === VIEW.length && view.every((it, i) => it === VIEW[i]);
   VIEW = view;
+  if (SEL.size) {                                         // never keep (and act on) photos that left the view
+    const vis = new Set(view.map(it => it.id));
+    for (const id of [...SEL]) if (!vis.has(id)) SEL.delete(id);
+  }
   writeHash();
   renderChrome({ view, yearCounts, folderCounts, folderTotal, placeCounts, placeTotal, base, catCounts, tagCounts });
   if (!unchanged) { renderGrid(); updateMap(); }
@@ -1872,7 +1876,7 @@ async function ownerAction(kind, items) {
     else if (kind === 'del') failed = await deleteItems(items);
   } catch (e) { alert('That didn\'t work: ' + e.message); }
   btns.forEach(b => b.disabled = false);
-  for (const it of items) if (!failed.includes(it)) SEL.delete(it.id);
+  SEL.clear();                                            // after a major operation, nothing stays selected
   await afterChange(failed);
 }
 
@@ -1988,6 +1992,7 @@ function allTags() {
 }
 function changeTags(items, tag, add) {
   tag = cleanTag(tag); if (!tag) return;
+  tagChanged = true;
   const same = allTags().find(([t]) => t.toLowerCase() === tag.toLowerCase());   // reuse existing spelling
   if (same) tag = same[0];
   for (const it of items) {
@@ -2011,7 +2016,9 @@ function renderTags(counts) {
 }
 
 let tagItems = [];
+let tagChanged = false;
 function openTagDialog(items) {
+  tagChanged = false;
   if (!items.length) return;
   tagItems = items;
   $('#tagFor').textContent = items.length === 1 ? items[0].name : `${fmtN(items.length)} selected items`;
@@ -2041,7 +2048,11 @@ function bindTagUI() {
     if (r) { changeTags(tagItems, r.dataset.dlgUntag, false); renderTagDialog(); }
     if (e.target === $('#tagDlg')) $('#tagClose').click();
   });
-  $('#tagClose').onclick = () => { $('#tagDlg').hidden = true; if (!$('#lb').hidden) showLightbox(); };
+  $('#tagClose').onclick = () => {
+    $('#tagDlg').hidden = true;
+    if (tagChanged) { SEL.clear(); $$('#results .tile.sel').forEach(t => t.classList.remove('sel')); updateSelbar(); }
+    if (!$('#lb').hidden) showLightbox();
+  };
   $('#tags').addEventListener('click', e => {
     const b = e.target.closest('[data-tag]'); if (!b) return;
     S.tag = S.tag === b.dataset.tag ? '' : b.dataset.tag; apply(); scrollTo(0, 0); toggleDrawer(false);
