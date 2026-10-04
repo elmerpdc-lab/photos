@@ -390,7 +390,7 @@ main { padding: 18px 24px 80px; min-width: 0; }
       </div>
       <div class="fgroup" id="catsGroup">
         <h3>More categories</h3>
-        <p class="places-note">Hidden unless you tick them. <b>Only</b> shows that category and nothing else.</p>
+        <p class="places-note">Tick <b>Private</b> to mix your private photos in. <b>Only</b> shows just that group, e.g. photos with no tags yet.</p>
         <div id="cats"></div>
       </div>
       <p style="font-size:12px;color:var(--muted)" id="catalogInfo"></p>
@@ -570,13 +570,11 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const CAT = { SCREEN: 1, WALL: 2, SOCIAL: 4, DL: 8, DOC: 16 };
 // Extra categories: hidden by default, shown with a tick, or shown on their own with "Only".
 const CATS = [
-  { key: 'screens',   label: 'Screenshots',                 has: it => !!(it.cat & CAT.SCREEN) },
-  { key: 'walls',     label: 'Wallpapers',                  has: it => !!(it.cat & CAT.WALL) },
-  { key: 'social',    label: 'Facebook, Messenger & chats', has: it => !!(it.cat & CAT.SOCIAL) },
-  { key: 'downloads', label: 'Downloads',                   has: it => !!(it.cat & CAT.DL) },
-  { key: 'docs',      label: 'Documents & scans',           has: it => !!(it.cat & CAT.DOC) },
-  { key: 'priv',      label: 'Private (only you)',          has: it => it.priv, owner: true },
+  { key: 'priv',     label: 'Private (only you)', has: it => it.priv, owner: true },
+  { key: 'untagged', label: 'Untagged',           has: it => !it.tags.length, owner: true, filterOnly: true },
 ];
+// What "Review clutter" suggests (no longer separate categories; chat/Facebook images count as normal photos)
+const CLUTTER_TESTS = [it => !!(it.cat & CAT.SCREEN), it => !!(it.cat & CAT.WALL), it => !!(it.cat & CAT.DL), it => !!(it.cat & CAT.DOC)];
 const catLabel = key => CATS.find(c => c.key === key).label;
 const REFRESH_AFTER = 12 * 3600e3;   // re-scan OneDrive in the background after 12 hours
 const CHUNK = 240;                   // tiles rendered per scroll step
@@ -957,7 +955,7 @@ const S = {
   q: '', years: new Set(), folder: '', place: '', bounds: null, map: false, sort: 'new',
   types: new Set(store.get('types', ['photo', 'video'])),
   // JPG and RAW copies of a photo are both shown (hiding the RAW made it pop up after moving the JPG)
-  show: Object.assign({ screens: false, walls: false, social: false, downloads: false }, store.get('show', {})),
+  show: Object.assign({ priv: false }, store.get('show', {})),
   only: '',
   size: store.get('size', 'm'),
   seed: 1,
@@ -996,7 +994,7 @@ function writeHash() {
 }
 
 // Review queue: shared photos that look like clutter and haven't been marked "Keep"
-const CLUTTER = CATS.filter(c => ['screens', 'walls', 'downloads', 'docs'].includes(c.key));   // chat and Facebook images are often family photos
+const CLUTTER = CLUTTER_TESTS.map(has => ({ has }));
 const isClutter = it => !it.priv && !KEPT.has(it.id) && CLUTTER.some(c => c.has(it));
 
 function passesBase(it) {
@@ -1007,7 +1005,7 @@ function passesBase(it) {
     if (!CATS.find(c => c.key === S.only).has(it)) return false;
     return S.only === 'priv' || !it.priv || S.show.priv;   // e.g. "Only Screenshots" = shared ones, unless Private is ticked
   }
-  return CATS.every(c => S.show[c.key] || !c.has(it));   // hide anything in a category that isn't ticked
+  return CATS.every(c => c.filterOnly || S.show[c.key] || !c.has(it));   // hide private items unless ticked
 }
 function inBounds(it) {
   if (it.lat == null) return false;
@@ -1102,8 +1100,10 @@ function renderChrome({ view, yearCounts, folderCounts, folderTotal, placeCounts
   $('#cats').innerHTML = shownCats.map(c => {
     const on = S.only === c.key, n = catCounts[c.key];
     const privSwitch = c.key === 'priv' && S.only && !on;   // stays usable: mixes private items into another "Only"
+    const box = c.filterOnly ? '<span style="width:16px;flex:none"></span>'
+      : `<input type="checkbox" data-show="${c.key}"${S.show[c.key] || on ? ' checked' : ''}${S.only && !privSwitch ? ' disabled' : ''}>`;
     return `<div class="cat${S.only && !on && !privSwitch ? ' dim' : ''}">
-      <label><input type="checkbox" data-show="${c.key}"${S.show[c.key] || on ? ' checked' : ''}${S.only && !privSwitch ? ' disabled' : ''}>
+      <label>${box}
         <span>${esc(c.label)}</span><span class="n">${fmtN(n)}</span></label>
       <button class="only${on ? ' on' : ''}" data-only="${c.key}" title="${on ? 'Back to all photos' : 'Show only ' + esc(c.label)}"${n || on ? '' : ' disabled'}>Only</button>
     </div>`;
