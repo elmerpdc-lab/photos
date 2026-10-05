@@ -956,6 +956,7 @@ const S = {
   types: new Set(store.get('types', ['photo', 'video'])),
   // JPG and RAW copies of a photo are both shown (hiding the RAW made it pop up after moving the JPG)
   show: Object.assign({ priv: false }, store.get('show', {})),
+  hideRaw: store.get('hideRaw', false),                    // when private photos are shown, leave out RAW files
   only: '',
   size: store.get('size', 'm'),
   seed: 1,
@@ -1001,6 +1002,7 @@ function passesBase(it) {
   const k = it.kind === 'video' ? 'video' : 'photo';
   if (!S.types.has(k)) return false;
   if (S.review && OWNER) return isClutter(it);
+  if (S.hideRaw && it.kind === 'raw' && (S.only === 'priv' || S.show.priv)) return false;
   if (S.only) {
     if (!CATS.find(c => c.key === S.only).has(it)) return false;
     return S.only === 'priv' || !it.priv || S.show.priv;   // e.g. "Only Screenshots" = shared ones, unless Private is ticked
@@ -1023,6 +1025,7 @@ function apply(opts = {}) {
   for (const it of ITEMS) {
     if (!S.types.has(it.kind === 'video' ? 'video' : 'photo')) continue;
     for (const c of CATS) if (c.has(it) && (c.key === 'priv' || !it.priv || S.show.priv)) catCounts[c.key]++;
+    if (it.priv && it.kind === 'raw') catCounts.raw = (catCounts.raw || 0) + 1;
   }
   const base = [], view = [];
   let folderTotal = 0, placeTotal = 0;
@@ -1106,7 +1109,11 @@ function renderChrome({ view, yearCounts, folderCounts, folderTotal, placeCounts
       <label>${box}
         <span>${esc(c.label)}</span><span class="n">${fmtN(n)}</span></label>
       <button class="only${on ? ' on' : ''}" data-only="${c.key}" title="${on ? 'Back to all photos' : 'Show only ' + esc(c.label)}"${n || on ? '' : ' disabled'}>Only</button>
-    </div>`;
+    </div>` + (c.key === 'priv' && (on || S.show.priv) && catCounts.raw ? `
+    <div class="cat" style="padding-left:32px">
+      <label><input type="checkbox" data-hideraw${S.hideRaw ? ' checked' : ''}>
+        <span>Hide RAW files</span><span class="n">${fmtN(catCounts.raw)}</span></label>
+    </div>` : '');
   }).join('');
 
   renderTimeline(yearCounts);
@@ -1592,6 +1599,8 @@ function bindUI() {
     store.set('types', [...S.types]); apply();
   });
   $('#cats').addEventListener('change', e => {
+    const r = e.target.closest('[data-hideraw]');
+    if (r) { S.hideRaw = r.checked; store.set('hideRaw', S.hideRaw); apply(); return; }
     const i = e.target.closest('[data-show]'); if (!i) return;
     S.show[i.dataset.show] = i.checked; store.set('show', S.show); apply();
   });
