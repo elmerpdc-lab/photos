@@ -556,6 +556,7 @@ const CFG = Object.assign({
   title: 'Family Photos', clientId: '', authority: 'https://login.microsoftonline.com/consumers',
   shareUrl: '', ownerPath: 'EEE/Photos', folderName: 'Photos', skipFolders: ['Catalogs', 'Lightroom Presets'],
   privatePath: 'EEE/Photos-Priv',
+  inboxPaths: ['Pictures/Camera Roll', 'Pictures/Samsung Gallery'],   // phone upload folders reviewed in place (owner only)
   filesPath: 'EEE',                                  // the owner's Files tab lists everything here except the photo folders
   familyFolders: [],                                 // folders shared with the family: [{ name, shareUrl }] (shown in their Files tab)
 }, window.PHOTO_CONFIG || {});
@@ -572,6 +573,7 @@ const CAT = { SCREEN: 1, WALL: 2, SOCIAL: 4, DL: 8, DOC: 16 };
 // Extra categories: hidden by default, shown with a tick, or shown on their own with "Only".
 const CATS = [
   { key: 'priv',     label: 'Private (only you)', has: it => it.priv, owner: true },
+  { key: 'inbox',    label: 'Phone uploads (not organized)', has: it => it.inbox, owner: true },
   { key: 'untagged', label: 'Untagged',           has: it => !it.tags.length, owner: true, filterOnly: true },
 ];
 // What "Review clutter" suggests (no longer separate categories; chat/Facebook images count as normal photos)
@@ -809,6 +811,8 @@ function dateFromText(s) {
 
 let ITEMS = [], CHILDREN = new Map(), ROOT = null, CATALOG_WHEN = 0;
 let RAW = [];                                             // the catalog as crawled (shared + the owner's private folder)
+let INBOX_RAW = [], INBOX_WHEN = 0;                       // owner: phone uploads not yet in Photos / Photos-Priv
+const INBOX = 'Phone uploads';
 let TAGS = new Map();                                     // item id -> ['Beach', 'Evan', ...]
 let OWNER = false, PRIVROOT = null, KEPT = new Set();     // owner-only state
 const PRIV = (CFG.privatePath || 'Photos-Priv').split('/').pop();
@@ -816,6 +820,7 @@ const isPrivDir = dir => dir === PRIV || dir.startsWith(PRIV + '/');
 const baseDir = dir => isPrivDir(dir) ? dir.slice(PRIV.length + 1) : dir;   // path as it would be in Photos
 
 function processCatalog(raw) {
+  if (INBOX_RAW.length) raw = raw.concat(INBOX_RAW);
   const jpgKeys = new Set();
   for (const r of raw) { const e = extOf(r[1]); if (e === 'jpg' || e === 'jpeg') jpgKeys.add(r[2] + '/' + r[1].replace(/\.[^.]+$/, '').toLowerCase()); }
   CHILDREN = new Map();
@@ -862,8 +867,16 @@ function processCatalog(raw) {
     const tags = TAGS.get(id) || [];
     return { id, name, dir, bdir, priv, tags, size, t, approx, y: t ? y : 0, mo, md: t ? (mo + 1) * 100 + d.getUTCDate() : 0,
       kind, ext: e, cam, w, h, dur, cat, twin, prefixes, key: tags.length ? key + ' ' + tags.join(' ').toLowerCase() : key, key0: key,
-      lat, lon, cell: lat == null ? '' : lat.toFixed(2) + ',' + lon.toFixed(2), place: '', placeName: '', placePrefixes: [] };
+      lat, lon, cell: lat == null ? '' : lat.toFixed(2) + ',' + lon.toFixed(2), place: '', placeName: '', placePrefixes: [],
+      inbox: dir === INBOX || dir.startsWith(INBOX + '/') };
   });
+  // Phone uploads: flag the ones taken at the same second as a photo/video you already have (likely duplicates)
+  if (INBOX_RAW.length) {
+    const stamp = n => { const m = /(?:^|\D)((?:19|20)\d{2})[-_.]?(\d{2})[-_.]?(\d{2})[-_. T]?(\d{2})[-_.]?(\d{2})[-_.]?(\d{2})/.exec(n); return m ? m.slice(1).join('') : null; };
+    const have = new Set();
+    for (const it of items) if (!it.inbox) { const st = stamp(it.name); if (st) have.add(st + (it.kind === 'video')); }
+    for (const it of items) if (it.inbox) { const st = stamp(it.name); it.haveMoment = !!st && have.has(st + (it.kind === 'video')); }
+  }
   return items;
 }
 
@@ -1412,6 +1425,7 @@ function makeTile(it) {
   if (DEMO) { el.style.background = `hsl(${hue(it.id)} 28% 60% / .35)`; inner += `<span class="ph">${esc(it.name)}</span>`; }
   if (it.kind === 'video') inner += `<span class="badge">▶ ${fmtDur(it.dur)}</span>`;
   else if (it.kind === 'raw') inner += '<span class="badge">RAW</span>';
+  if (it.inbox && it.haveMoment) inner += '<span class="lock" title="A photo/video taken at the same second is already in Photos or Photos-Priv" style="background:#b24d24">already have</span>';
   if (it.priv) inner += '<span class="lock" title="Private: only you can see this">🔒</span>';
   if (OWNER) inner += '<span class="view" data-view role="button" title="Open to check it (videos play here)">⤢</span>';
   el.innerHTML = inner;
@@ -1537,8 +1551,8 @@ async function showLightbox() {
       forgetItems([it]);
     }
   });
-  $('#lbKeep').hidden = !(OWNER && isClutter(it));
-  $('#lbPriv').hidden = !OWNER;
+  $('#lbKeep').hidden = !(OWNER && isClutter(it)) || it.inbox;
+  $('#lbPriv').hidden = !OWNER || it.inbox;
   $('#lbPriv').textContent = it.priv ? 'Share again' : 'Make private';
   $('#lbDel').hidden = !OWNER;
 
@@ -1670,7 +1684,7 @@ function bindUI() {
   $('#scrim').onclick = () => toggleDrawer(false);
   $('#btnSignIn').onclick = signIn;
   $('#btnSignOut').onclick = $('#btnSignOut2').onclick = $('#btnSignOut3').onclick = () => { if (DEMO) location.href = location.pathname; else signOut(); };
-  $('#btnRefresh').onclick = () => TAB === 'files' ? refreshFiles(true) : refresh(true, true);
+  $('#btnRefresh').onclick = async () => { if (TAB === 'files') return refreshFiles(true); await refresh(true, true); loadInbox(true); };
   $('#bannerBtn').onclick = () => { $('#banner').hidden = true; if (PENDING) { const p = PENDING; PENDING = null; useCatalog(p.raw, p.when); } };
   $('#btnLink').onclick = async () => {
     const link = $('#linkInput').value.trim();
@@ -1846,6 +1860,10 @@ async function moveItems(items, toPrivate) {
       body: JSON.stringify({ parentReference: { id: parent }, '@microsoft.graph.conflictBehavior': 'rename' }) });
     const r = byId.get(it.id);
     if (r) { r[1] = res.name || r[1]; r[2] = toPrivate ? (it.bdir ? PRIV + '/' + it.bdir : PRIV) : it.bdir; }
+    if (!toPrivate && TAGS.has(it.id)) {                    // shared = reviewed: drop the "Review" tag
+      const left = TAGS.get(it.id).filter(t => t.toLowerCase() !== 'review');
+      left.length ? TAGS.set(it.id, left) : TAGS.delete(it.id);
+    }
   });
 }
 
@@ -1856,6 +1874,7 @@ async function deleteItems(items) {
     gone.add(it.id); TAGS.delete(it.id);
   });
   RAW = RAW.filter(r => !gone.has(r[0]));
+  if (INBOX_RAW.length) { INBOX_RAW = INBOX_RAW.filter(r => !gone.has(r[0])); idb.set('inbox1:' + ROOT.id, { raw: INBOX_RAW, when: INBOX_WHEN }); }
   return failed;
 }
 
@@ -1875,7 +1894,9 @@ async function afterChange(failed) {
 
 async function ownerAction(kind, items) {
   if (!items.length) return;
-  if (kind === 'del' && !confirm(`Delete ${items.length} item${items.length === 1 ? '' : 's'}?\n\nThey go to your OneDrive recycle bin, where you can restore them for 30 days.`)) return;
+  const samsung = items.filter(it => it.inbox && it.dir.startsWith(INBOX + '/Samsung Gallery')).length;
+  if (kind === 'del' && !confirm(`Delete ${items.length} item${items.length === 1 ? '' : 's'}?\n\nThey go to your OneDrive recycle bin, where you can restore them for 30 days.`
+    + (samsung ? `\n\nNote: ${samsung} of them are in Samsung Gallery, which syncs with your phone - deleting them here will probably remove them from the phone's Gallery too (into its trash).` : ''))) return;
   $('#selbar').hidden = false;
   const btns = $$('#selbar button'); btns.forEach(b => b.disabled = true);
   let failed = [];
@@ -1910,11 +1931,12 @@ function updateSelbar() {
   if (bar.hidden) return;
   const items = ITEMS.filter(it => SEL.has(it.id));
   $('#selCount').textContent = items.length ? `${fmtN(items.length)} selected` : 'Tap photos to select · ⤢ to open one';
-  $('#selKeep').hidden = !S.review || !items.length;
-  $('#selPriv').hidden = !items.some(it => !it.priv);
-  $('#selShare').hidden = !items.some(it => it.priv);
+  const inboxSel = items.some(it => it.inbox);
+  $('#selKeep').hidden = !S.review || !items.length || inboxSel;
+  $('#selPriv').hidden = inboxSel || !items.some(it => !it.priv);
+  $('#selShare').hidden = inboxSel || !items.some(it => it.priv);
   $('#selDel').hidden = !items.length;
-  $('#selTag').hidden = !items.length;
+  $('#selTag').hidden = !items.length || inboxSel;
 }
 
 function toggleSel(el, range) {
@@ -2534,6 +2556,32 @@ async function refresh(background, manual = false) {
   }
 }
 
+async function loadInbox(force = false) {
+  if (!OWNER || DEMO || !(CFG.inboxPaths || []).length) return;
+  const cached = !force && await idb.get('inbox1:' + ROOT.id);
+  if (cached && cached.raw && Date.now() - cached.when < REFRESH_AFTER) { INBOX_RAW = cached.raw; INBOX_WHEN = cached.when; }
+  else {
+    await refresh(true);                                  // make sure recent copies into Photos-Priv count as organized
+    const have = new Set(RAW.map(r => r[1].toLowerCase() + '|' + r[3]));     // same name + size = already organized
+    const out = [];
+    for (const path of CFG.inboxPaths) {
+      try {
+        const it = await graph('/me/drive/root:/' + path.split('/').map(encodeURIComponent).join('/') + '?$select=id,name,parentReference');
+        const label = path.split('/').pop();
+        const rows = await crawl({ driveId: it.parentReference.driveId, id: it.id }, () => {});
+        for (const r of rows) if (!have.has(r[1].toLowerCase() + '|' + r[3])) { r[2] = INBOX + '/' + label + (r[2] ? '/' + r[2] : ''); out.push(r); }
+      } catch (e) { console.warn('Phone folder not available:', path, e.message); }
+    }
+    INBOX_RAW = out; INBOX_WHEN = Date.now();
+    await idb.set('inbox1:' + ROOT.id, { raw: INBOX_RAW, when: INBOX_WHEN });
+  }
+  const y = scrollY;
+  ITEMS = processCatalog(RAW);
+  apply({ keepGrid: true });
+  scrollTo(0, y);
+  resolvePlaces();
+}
+
 async function startCatalog() {
   const cached = await idb.get(catalogKey());
   if (cached && cached.raw) {
@@ -2586,6 +2634,7 @@ async function main() {
     $('#tabs').hidden = !filesAllowed();                  // owner: all of EEE; family: the folders shared with them
     await loadTags();
     await startCatalog();
+    loadInbox();                                          // owner: phone uploads to review, in the background
     if (filesAllowed() && TAB_WANTED === 'files') setTab('files');
   } catch (e) { fail(e); }
 }

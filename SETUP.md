@@ -96,6 +96,11 @@ Send that link to your family. On phones, they can use **Share → Add to Home S
   **Search inside documents** uses OneDrive's full-text search. Clicking a file opens a panel with a preview of its first
   page and **Open in OneDrive / Download / Show in folder**. Family members never get this tab, and nothing in `EEE` is
   shared by it. ⟳ updates the list, and it also refreshes itself every 12 hours. Office lock files (`~$…`) are hidden.
+- **Phone uploads (owner only):** under More categories, **Only → Phone uploads (not organized)** shows the photos
+  and videos in `Pictures\Camera Roll` and `Pictures\Samsung Gallery` that aren't in `Photos`/`Photos-Priv` yet
+  (same name + size counts as organized). They're shown where they are. You can open, play and **Delete** them
+  there; "already have" marks ones taken at the same second as something you already have. Deleting from Samsung
+  Gallery probably also removes the photo from the phone's Gallery, which syncs both ways. ⟳ re-checks the folders.
 - **Private photos (owner only):** `EEE\Photos-Priv` is *not* shared, so only you can open it. OneDrive enforces
   this, not the website. When you're signed in, the dashboard spots that you own the Photos folder and adds an
   **"Only you see this"** box at the top of the left panel:
