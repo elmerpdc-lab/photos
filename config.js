@@ -17,18 +17,18 @@ window.PHOTO_CONFIG = {
   shareUrl: 'https://1drv.ms/f/c/18cafbba587bf2dd/IgDd8ntYuvvKIIAYKScAAAAAARd7ZtBbeOqWGg2ju43HcyU',
 
   // Where the folder lives in the owner's OneDrive, and its name as family members see it.
-  ownerPath: 'EEE/Photos',
-  folderName: 'Photos',
+  ownerPath: 'EEE/02_Photos',
+  folderName: '02_Photos',
 
   // The owner's private folder: NOT shared, outside Photos. Only the owner sees it in the dashboard, and
   // OneDrive itself keeps everyone else out. "Make private" moves photos here; "Share again" moves them back.
-  privatePath: 'EEE/Photos-Priv',
+  privatePath: 'EEE/03_Elmer/Photos-Priv',
 
   // Folders shared with the Family Group that should appear in family members' Files tab.
   // Use the folder's share link (it only works for signed-in family members). The owner always sees all of EEE.
   familyFolders: [
     // Verified 2026-10-02: refused without sign-in (403 / 401), like the Photos link.
-    { name: 'Family Documents', shareUrl: 'https://1drv.ms/f/c/18cafbba587bf2dd/IgCzWlldJpTQRrFhcs-Y1PftAXm0hmpUOi-lLhmDlY8Y78s' },
+    { name: '01_Documents', shareUrl: 'https://1drv.ms/f/c/18cafbba587bf2dd/IgCzWlldJpTQRrFhcs-Y1PftAXm0hmpUOi-lLhmDlY8Y78s' },
   ],
 
   // Top-level folders that hold no family photos (Lightroom files, etc.).

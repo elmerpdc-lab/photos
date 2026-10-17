@@ -101,7 +101,7 @@ Send that link to your family. On phones, they can use **Share → Add to Home S
   (same name + size counts as organized). They're shown where they are. You can open, play and **Delete** them
   there; "already have" marks ones taken at the same second as something you already have. Deleting from Samsung
   Gallery probably also removes the photo from the phone's Gallery, which syncs both ways. ⟳ re-checks the folders.
-- **Private photos (owner only):** `EEE\Photos-Priv` is *not* shared, so only you can open it. OneDrive enforces
+- **Private photos (owner only):** `EEE_Elmer\Photos-Priv` is *not* shared, so only you can open it. OneDrive enforces
   this, not the website. When you're signed in, the dashboard spots that you own the Photos folder and adds an
   **"Only you see this"** box at the top of the left panel:
   - **Review clutter:** shared screenshots, wallpapers, downloads and document scans, ready to sort. Tap photos to select

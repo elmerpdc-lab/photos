@@ -554,8 +554,8 @@ main { padding: 18px 24px 80px; min-width: 0; }
    ===================================================================== */
 const CFG = Object.assign({
   title: 'Family Photos', clientId: '', authority: 'https://login.microsoftonline.com/consumers',
-  shareUrl: '', ownerPath: 'EEE/Photos', folderName: 'Photos', skipFolders: ['Catalogs', 'Lightroom Presets'],
-  privatePath: 'EEE/Photos-Priv',
+  shareUrl: '', ownerPath: 'EEE/02_Photos', folderName: '02_Photos', skipFolders: ['Catalogs', 'Lightroom Presets'],
+  privatePath: 'EEE/03_Elmer/Photos-Priv',
   inboxPaths: ['Pictures/Camera Roll', 'Pictures/Samsung Gallery'],   // phone upload folders reviewed in place (owner only)
   filesPath: 'EEE',                                  // the owner's Files tab lists everything here except the photo folders
   familyFolders: [],                                 // folders shared with the family: [{ name, shareUrl }] (shown in their Files tab)
@@ -873,9 +873,18 @@ function processCatalog(raw) {
   // Phone uploads: flag the ones taken at the same second as a photo/video you already have (likely duplicates)
   if (INBOX_RAW.length) {
     const stamp = n => { const m = /(?:^|\D)((?:19|20)\d{2})[-_.]?(\d{2})[-_.]?(\d{2})[-_. T]?(\d{2})[-_.]?(\d{2})[-_.]?(\d{2})/.exec(n); return m ? m.slice(1).join('') : null; };
-    const have = new Set();
-    for (const it of items) if (!it.inbox) { const st = stamp(it.name); if (st) have.add(st + (it.kind === 'video')); }
-    for (const it of items) if (it.inbox) { const st = stamp(it.name); it.haveMoment = !!st && have.has(st + (it.kind === 'video')); }
+    const have = new Map();                                // capture second + photo/video -> organized items
+    for (const it of items) if (!it.inbox) { const st = stamp(it.name); if (st) { const k = st + (it.kind === 'video'); (have.get(k) || have.set(k, []).get(k)).push(it); } }
+    for (const it of items) if (it.inbox) {
+      const st = stamp(it.name), m = st && have.get(st + (it.kind === 'video'));
+      if (!m) continue;
+      const edit = n => /~\d/.test(n);
+      const best = m.reduce((a, b) => Math.abs(b.size - it.size) < Math.abs(a.size - it.size) ? b : a);
+      const r = best.size ? it.size / best.size : 0;
+      // same: identical size | lesser: a smaller copy of one you have | original: the full version of your edit | better: higher quality than yours | edit: an edited version
+      it.haveMoment = edit(it.name) ? 'edit' : r >= 0.99 && r <= 1.01 ? 'same' : r < 0.99 ? 'lesser' : edit(best.name) ? 'original' : 'better';
+      it.haveMatch = best.dir + '/' + best.name;
+    }
   }
   return items;
 }
@@ -1425,7 +1434,11 @@ function makeTile(it) {
   if (DEMO) { el.style.background = `hsl(${hue(it.id)} 28% 60% / .35)`; inner += `<span class="ph">${esc(it.name)}</span>`; }
   if (it.kind === 'video') inner += `<span class="badge">▶ ${fmtDur(it.dur)}</span>`;
   else if (it.kind === 'raw') inner += '<span class="badge">RAW</span>';
-  if (it.inbox && it.haveMoment) inner += '<span class="lock" title="A photo/video taken at the same second is already in Photos or Photos-Priv" style="background:#b24d24">already have</span>';
+  if (it.inbox && it.haveMoment) {
+    const [txt, bg] = { same: ['duplicate · safe to delete', '#2e7d32'], lesser: ['smaller copy · safe to delete', '#2e7d32'],
+      better: ['better original · keep', '#1f6fb2'], original: ['full original of your edit · keep', '#1f6fb2'], edit: ['edited version', '#6b665e'] }[it.haveMoment];
+    inner += `<span class="lock" title="Compared with ${esc(it.haveMatch)}" style="background:${bg}">${txt}</span>`;
+  }
   if (it.priv) inner += '<span class="lock" title="Private: only you can see this">🔒</span>';
   if (OWNER) inner += '<span class="view" data-view role="button" title="Open to check it (videos play here)">⤢</span>';
   el.innerHTML = inner;
@@ -2181,7 +2194,10 @@ async function filesRoots() {
 }
 
 function crawlFiles(root, onProgress) {
-  const skipTop = new Set(root.skipPhotos ? [CFG.folderName, PRIV].map(n => n.toLowerCase()) : []);
+  // the photo folders (wherever they sit under filesPath) live in the Photos tab
+  const base = (CFG.filesPath || 'EEE').toLowerCase() + '/';
+  const skip = new Set(root.skipPhotos ? [CFG.ownerPath, CFG.privatePath].filter(Boolean).map(p => p.toLowerCase())
+    .filter(p => p.startsWith(base)).map(p => p.slice(base.length)) : []);
   const out = [], queue = [{ id: root.id, path: root.prefix }];
   let active = 0, folders = 0, failed = null;
   async function list(f) {
@@ -2191,8 +2207,9 @@ function crawlFiles(root, onProgress) {
       for (const c of r.value) {
         if (c.name.startsWith('.')) continue;
         if (c.folder) {
-          if (f.path === root.prefix && skipTop.has(c.name.toLowerCase())) continue;     // photos live in the Photos tab
-          queue.push({ id: c.id, path: f.path ? f.path + '/' + c.name : c.name });
+          const sub = f.path ? f.path + '/' + c.name : c.name;
+          if (skip.has(sub.toLowerCase())) continue;     // photos live in the Photos tab
+          queue.push({ id: c.id, path: sub });
         } else {
           out.push([c.id, c.name, f.path, c.size || 0, (c.fileSystemInfo || {}).lastModifiedDateTime || c.lastModifiedDateTime || '']);
         }

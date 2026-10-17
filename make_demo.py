@@ -41,7 +41,7 @@ def read_gps(path):
         return [None, None]
 
 
-ROOT = sys.argv[1] if len(sys.argv) > 1 else r'C:\Users\elmer\OneDrive\EEE\Photos'
+ROOT = sys.argv[1] if len(sys.argv) > 1 else r'C:\Users\elmer\OneDrive\EEE\02_Photos'
 SKIP_TOP = {'Catalogs', 'Lightroom Presets'}
 EXT = set('jpg jpeg png gif webp bmp tif tiff heic heif cr2 cr3 nef arw dng orf rw2 raf '
           'mp4 mov m4v avi 3gp mkv wmv mpg mpeg webm'.split())
@@ -73,7 +73,7 @@ files = []
 for dirpath, dirnames, filenames in os.walk(EEE):
     rel = os.path.relpath(dirpath, EEE).replace(os.sep, '/')
     rel = '' if rel == '.' else rel
-    dirnames[:] = [d for d in dirnames if not d.startswith('.') and not (rel == '' and d in ('Photos', 'Photos-Priv'))]
+    dirnames[:] = [d for d in dirnames if not d.startswith('.') and (rel + '/' + d).lstrip('/') not in ('02_Photos', '03_Elmer/Photos-Priv')]
     for name in filenames:
         if name.startswith('.'):
             continue
