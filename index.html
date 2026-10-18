@@ -492,6 +492,8 @@ main { padding: 18px 24px 80px; min-width: 0; }
   <button id="selAll">Select all shown</button>
   <button id="selTag" class="primary" title="Add or remove tags on the selected items">Tag…</button>
   <button id="selKeep" class="primary" title="Keep shared and stop suggesting it">Keep</button>
+  <button id="selCopyPub" class="primary" title="Copy into the shared Photos folder (year / day folder). The phone copy stays where it is." hidden>Copy to Photos</button>
+  <button id="selCopyPriv" title="Copy into your private folder (year / day folder), tagged Review. The phone copy stays where it is." hidden>Copy to Private</button>
   <button id="selPriv" class="primary" title="Move to your private folder">Make private</button>
   <button id="selShare" title="Move back to the shared Photos folder">Share again</button>
   <button id="selDel" class="danger" title="Move to the OneDrive recycle bin">Delete</button>
@@ -539,6 +541,8 @@ main { padding: 18px 24px 80px; min-width: 0; }
       <a class="btn" id="lbOpen" target="_blank" rel="noopener" aria-disabled="true">Open in OneDrive</a>
       <a class="btn" id="lbFolder" target="_blank" rel="noopener" aria-disabled="true">Show in folder</a>
       <button class="btn owner" id="lbKeep" hidden title="Keep shared and stop suggesting it">Keep</button>
+      <button class="btn owner" id="lbCopyPub" hidden>Copy to Photos</button>
+      <button class="btn owner" id="lbCopyPriv" hidden>Copy to Private</button>
       <button class="btn owner" id="lbPriv" hidden>Make private</button>
       <button class="btn owner" id="lbDel" hidden>Delete</button>
     </div>
@@ -1566,6 +1570,7 @@ async function showLightbox() {
   });
   $('#lbKeep').hidden = !(OWNER && isClutter(it)) || it.inbox;
   $('#lbPriv').hidden = !OWNER || it.inbox;
+  $('#lbCopyPub').hidden = $('#lbCopyPriv').hidden = !OWNER || !it.inbox;
   $('#lbPriv').textContent = it.priv ? 'Share again' : 'Make private';
   $('#lbDel').hidden = !OWNER;
 
@@ -1880,6 +1885,49 @@ async function moveItems(items, toPrivate) {
   });
 }
 
+// Phone uploads -> Photos or Photos-Priv, as a server-side COPY into year/day folders (2024/2024_05_17).
+// The original stays in Camera Roll / Samsung Gallery, so nothing changes on the phone.
+async function copyInboxItems(items, toPrivate) {
+  if (toPrivate) PRIVROOT = PRIVROOT || await privateRoot(true);
+  const root = toPrivate ? PRIVROOT : ROOT;
+  const rowById = new Map(INBOX_RAW.map(r => [r[0], r]));
+  const copied = new Set();
+  const failed = await runEach(items, toPrivate ? 'Copying to Private' : 'Copying to Photos', async it => {
+    const d = new Date(it.t), p2 = n => String(n).padStart(2, '0');
+    const dest = it.t && !it.approx ? `${d.getUTCFullYear()}/${d.getUTCFullYear()}_${p2(d.getUTCMonth() + 1)}_${p2(d.getUTCDate())}` : 'Unknown date';
+    const parent = await ensurePath(root, dest);
+    const r = await fetch(`${GRAPH}/drives/${ROOT.driveId}/items/${it.id}/copy?@microsoft.graph.conflictBehavior=rename`, {
+      method: 'POST', headers: { Authorization: 'Bearer ' + await token(WRITE_SCOPES), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parentReference: { driveId: root.driveId, id: parent } }) });
+    if (r.status === 429) { noteThrottle(30e3); throw Object.assign(new Error('throttled'), { status: 429 }); }
+    if (r.status !== 202) { const e = new Error('Copy failed (' + r.status + ')'); e.status = r.status === 404 ? 404 : r.status; throw e; }
+    const monitor = r.headers.get('Location');
+    let newId = null;
+    for (let i = 0; i < 120 && !newId; i++) {               // big videos can take a while
+      await sleep(i < 5 ? 800 : 2500);
+      let j = null;
+      try { const m = await fetch(monitor); if (m.ok) j = await m.json(); } catch {}
+      if (j && j.resourceId) newId = j.resourceId;
+      else if (j && j.status === 'failed') throw new Error('Copy failed on the server');
+      else if (!j) break;                                   // monitor gone: look the file up instead
+    }
+    let name = it.name;
+    if (newId) name = (await graph(`/drives/${root.driveId}/items/${newId}?$select=name`)).name;
+    else newId = (await graph(`/drives/${root.driveId}/items/${parent}:/${encodeURIComponent(it.name)}?$select=id`)).id;
+    const src = rowById.get(it.id), row = src.slice();
+    row[0] = newId; row[1] = name; row[2] = toPrivate ? PRIV + '/' + dest : dest;
+    RAW.push(row);
+    copied.add(it.id);
+    if (toPrivate) {                                        // same as the earlier batch: Review + where it came from
+      const from = it.dir.slice(INBOX.length + 1).split('/')[0];
+      TAGS.set(newId, [...new Set(['Review', from].filter(Boolean))]);
+    }
+  });
+  INBOX_RAW = INBOX_RAW.filter(r => !copied.has(r[0]));
+  idb.set('inbox1:' + ROOT.id, { raw: INBOX_RAW, when: INBOX_WHEN });
+  return failed;
+}
+
 async function deleteItems(items) {
   const gone = new Set();
   const failed = await runEach(items, 'Deleting', async it => {
@@ -1918,6 +1966,7 @@ async function ownerAction(kind, items) {
     else if (kind === 'priv') failed = await moveItems(items.filter(it => !it.priv), true);
     else if (kind === 'share') failed = await moveItems(items.filter(it => it.priv), false);
     else if (kind === 'del') failed = await deleteItems(items);
+    else if (kind === 'copyPub' || kind === 'copyPriv') failed = await copyInboxItems(items.filter(it => it.inbox), kind === 'copyPriv');
   } catch (e) { alert('That didn\'t work: ' + e.message); }
   btns.forEach(b => b.disabled = false);
   SEL.clear();                                            // after a major operation, nothing stays selected
@@ -1949,6 +1998,7 @@ function updateSelbar() {
   $('#selPriv').hidden = inboxSel || !items.some(it => !it.priv);
   $('#selShare').hidden = inboxSel || !items.some(it => it.priv);
   $('#selDel').hidden = !items.length;
+  $('#selCopyPub').hidden = $('#selCopyPriv').hidden = !items.some(it => it.inbox);
   $('#selTag').hidden = !items.length || inboxSel;
 }
 
@@ -1972,6 +2022,8 @@ function bindOwnerUI() {
   $('#selPriv').onclick = () => ownerAction('priv', picked());
   $('#selShare').onclick = () => ownerAction('share', picked());
   $('#selDel').onclick = () => ownerAction('del', picked());
+  $('#selCopyPub').onclick = () => ownerAction('copyPub', picked());
+  $('#selCopyPriv').onclick = () => ownerAction('copyPriv', picked());
   $('#selTag').onclick = () => openTagDialog(picked());
   const lbAct = async kind => {
     const it = LB.list[LB.i], i = LB.i;
@@ -1983,6 +2035,8 @@ function bindOwnerUI() {
   $('#lbKeep').onclick = () => lbAct('keep');
   $('#lbPriv').onclick = () => lbAct(LB.list[LB.i].priv ? 'share' : 'priv');
   $('#lbDel').onclick = () => lbAct('del');
+  $('#lbCopyPub').onclick = () => lbAct('copyPub');
+  $('#lbCopyPriv').onclick = () => lbAct('copyPriv');
 }
 
 /* =====================================================================
