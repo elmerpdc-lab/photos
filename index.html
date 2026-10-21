@@ -756,6 +756,80 @@ function gps(loc) {
   return [Math.round(loc.latitude * 1e4) / 1e4, Math.round(loc.longitude * 1e4) / 1e4];
 }
 
+// One catalog row from a Graph item (null = not a photo/video)
+function mediaRow(c) {
+  if (!isMedia(c.name)) return null;
+  const p = c.photo || {}, dims = c.image || c.video || {};
+  let cam = p.cameraModel || '';
+  if (p.cameraMake && cam && !cam.toLowerCase().startsWith(p.cameraMake.toLowerCase().split(' ')[0])) cam = p.cameraMake + ' ' + cam;
+  return [c.id, c.name, '', c.size || 0, p.takenDateTime || '', (c.fileSystemInfo || {}).lastModifiedDateTime || '',
+    cam, dims.width || 0, dims.height || 0, (c.video || {}).duration || 0, ...gps(c.location)];
+}
+
+/* Incremental listing with OneDrive's delta feed. The first run reads the whole tree once (a few hundred
+   requests instead of one per folder); after that OneDrive sends only what changed since last time, so
+   refreshing usually takes one or two requests. The state (folders, files, bookmark) is kept in IndexedDB.
+   Falls back to the folder-by-folder crawl if delta isn't available (e.g. some shared folders). */
+const DELTA_V = 1;
+async function deltaList(root, onProgress = () => {}) {
+  const key = `delta${DELTA_V}:${root.driveId}:${root.id}`;
+  const fresh = () => ({ link: null, folders: {}, files: {}, bad: false });
+  let st = (await idb.get(key)) || fresh();
+  if (st.bad) return crawl(root, onProgress);
+  const first = `/drives/${root.driveId}/items/${root.id}/delta?$top=1000&$select=id,name,size,folder,file,deleted,parentReference,photo,video,image,fileSystemInfo,location`;
+  const wasFull = !st.link;
+  let url = st.link || first, seen = 0;
+  try {
+    for (;;) {
+      let r;
+      try { r = await graph(url); }
+      catch (e) {
+        if (e.status === 410 && st.link) { st = fresh(); url = first; continue; }   // bookmark expired: start over once
+        throw e;
+      }
+      for (const c of r.value) {
+        if (c.id === root.id) continue;
+        if (c.deleted) { delete st.folders[c.id]; delete st.files[c.id]; continue; }
+        const parent = (c.parentReference || {}).id;
+        if (c.folder) { st.folders[c.id] = [parent, c.name]; delete st.files[c.id]; }
+        else { const row = mediaRow(c); if (row) st.files[c.id] = [parent, row]; else delete st.files[c.id]; }
+      }
+      seen += r.value.length;
+      onProgress(Object.keys(st.folders).length, wasFull ? Object.keys(st.files).length : seen);
+      if (r['@odata.nextLink']) url = r['@odata.nextLink'];
+      else { st.link = r['@odata.deltaLink']; break; }
+    }
+  } catch (e) {
+    if (e.status === 429 || e.status >= 500) throw e;           // temporary: try again next time
+    console.warn('Delta not available here, using the folder crawl', e);
+    await idb.set(key, { ...fresh(), bad: true });
+    return crawl(root, onProgress);
+  }
+  const files = Object.values(st.files);
+  // Sanity check on the first full read: delta must carry the camera details the folder crawl gets
+  if (wasFull && files.length > 200 && !files.some(([, r]) => r[4] || r[6])) {
+    console.warn('Delta returned no camera details; using the folder crawl');
+    await idb.set(key, { ...fresh(), bad: true });
+    return crawl(root, onProgress);
+  }
+  await idb.set(key, st);
+  // Folder paths from parent links; anything whose chain doesn't reach the root (moved out, deleted folder) is dropped
+  const paths = new Map([[root.id, '']]);
+  const pathOf = id => {
+    if (paths.has(id)) return paths.get(id);
+    const f = st.folders[id];
+    if (!f) return null;
+    paths.set(id, null);                                   // guards against loops
+    const pp = pathOf(f[0]);
+    const path = pp == null || skipFolder(f[1], pp) ? null : pp ? pp + '/' + f[1] : f[1];
+    paths.set(id, path);
+    return path;
+  };
+  const out = [];
+  for (const [parent, row] of files) { const dir = pathOf(parent); if (dir != null) { const r = row.slice(); r[2] = dir; out.push(r); } }
+  return out;
+}
+
 function crawl(root, onProgress) {
   const out = [], queue = [{ id: root.id, path: '' }];
   let active = 0, folders = 0, failed = null;
@@ -767,13 +841,7 @@ function crawl(root, onProgress) {
       for (const c of r.value) {
         if (c.folder) {
           if (!skipFolder(c.name, f.path)) queue.push({ id: c.id, path: f.path ? f.path + '/' + c.name : c.name });
-        } else if (isMedia(c.name)) {
-          const p = c.photo || {}, dims = c.image || c.video || {};
-          let cam = p.cameraModel || '';
-          if (p.cameraMake && cam && !cam.toLowerCase().startsWith(p.cameraMake.toLowerCase().split(' ')[0])) cam = p.cameraMake + ' ' + cam;
-          out.push([c.id, c.name, f.path, c.size || 0, p.takenDateTime || '', (c.fileSystemInfo || {}).lastModifiedDateTime || '',
-            cam, dims.width || 0, dims.height || 0, (c.video || {}).duration || 0, ...gps(c.location)]);
-        }
+        } else { const row = mediaRow(c); if (row) { row[2] = f.path; out.push(row); } }
       }
       url = r['@odata.nextLink'];
     }
@@ -819,6 +887,7 @@ let INBOX_RAW = [], INBOX_WHEN = 0;                       // owner: phone upload
 const INBOX = 'Phone uploads';
 let TAGS = new Map();                                     // item id -> ['Beach', 'Evan', ...]
 let OWNER = false, PRIVROOT = null, KEPT = new Set();     // owner-only state
+let COPIED = new Set();                                   // phone uploads already copied into Photos / Photos-Priv (by phone item id)
 const PRIV = (CFG.privatePath || 'Photos-Priv').split('/').pop();
 const isPrivDir = dir => dir === PRIV || dir.startsWith(PRIV + '/');
 const baseDir = dir => isPrivDir(dir) ? dir.slice(PRIV.length + 1) : dir;   // path as it would be in Photos
@@ -1792,11 +1861,13 @@ async function detectOwner() {
   if (!OWNER) return;
   PRIVROOT = await privateRoot(false);
   KEPT = new Set((await idb.get('kept:' + ROOT.id)) || []);
-  if (PRIVROOT) {                                          // the keep list also lives in the private folder, for other devices
+  COPIED = new Set((await idb.get('copied:' + ROOT.id)) || []);
+  if (PRIVROOT) {                                          // the keep + copied lists also live in the private folder, for other devices
     try {
       const f = await graph(`/drives/${PRIVROOT.driveId}/items/${PRIVROOT.id}:/review.json`);
       const j = await (await fetch(f['@microsoft.graph.downloadUrl'])).json();
       for (const id of j.kept || []) KEPT.add(id);
+      for (const id of j.copied || []) COPIED.add(id);
     } catch {}
   }
 }
@@ -1840,12 +1911,13 @@ async function ensurePath(root, dir) {
 let keptTimer = 0;
 function saveKept() {
   idb.set('kept:' + ROOT.id, [...KEPT]);
+  idb.set('copied:' + ROOT.id, [...COPIED]);
   clearTimeout(keptTimer);
   keptTimer = setTimeout(async () => {
     try {
       PRIVROOT = PRIVROOT || await privateRoot(true);
       await graph(`/drives/${PRIVROOT.driveId}/items/${PRIVROOT.id}:/review.json:/content`, { method: 'PUT', scopes: WRITE_SCOPES,
-        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kept: [...KEPT] }) });
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kept: [...KEPT], copied: [...COPIED] }) });
     } catch (e) { console.warn('Could not save the keep list', e); }
   }, 1500);
 }
@@ -1925,6 +1997,7 @@ async function copyInboxItems(items, toPrivate) {
   });
   INBOX_RAW = INBOX_RAW.filter(r => !copied.has(r[0]));
   idb.set('inbox1:' + ROOT.id, { raw: INBOX_RAW, when: INBOX_WHEN });
+  if (copied.size) { copied.forEach(id => COPIED.add(id)); saveKept(); }   // remembered, so they stay off the list
   return failed;
 }
 
@@ -2576,8 +2649,13 @@ function useCatalog(raw, when) {
   resolvePlaces();
 }
 
-async function refresh(background, manual = false) {
-  if (BUSY) return;
+let REFRESHING = null;
+function refresh(background, manual = false) {
+  if (REFRESHING) return REFRESHING;                       // already running: wait for that one
+  REFRESHING = doRefresh(background, manual).finally(() => { REFRESHING = null; });
+  return REFRESHING;
+}
+async function doRefresh(background, manual) {
   BUSY = true;
   const btn = $('#btnRefresh');
   btn.classList.add('spin');
@@ -2587,9 +2665,9 @@ async function refresh(background, manual = false) {
       const t = `${fmtN(found)} photos and videos found in ${fmtN(folders)} folders…`;
       if (background) btn.title = 'Updating: ' + t; else $('#loadText').textContent = t;
     };
-    const raw = await crawl(ROOT, progress);
-    if (OWNER && PRIVROOT) {                              // the owner also sees their private folder
-      const priv = await crawl(PRIVROOT, progress);
+    const [raw, priv] = await Promise.all([deltaList(ROOT, progress),
+      OWNER && PRIVROOT ? deltaList(PRIVROOT, () => {}) : null]);   // the owner also sees their private folder
+    if (priv) {
       for (const r of priv) r[2] = r[2] ? PRIV + '/' + r[2] : PRIV;
       raw.push(...priv);
     }
@@ -2629,9 +2707,12 @@ async function refresh(background, manual = false) {
 
 async function loadInbox(force = false) {
   if (!OWNER || DEMO || !(CFG.inboxPaths || []).length) return;
-  const cached = !force && await idb.get('inbox1:' + ROOT.id);
-  if (cached && cached.raw && Date.now() - cached.when < REFRESH_AFTER) { INBOX_RAW = cached.raw; INBOX_WHEN = cached.when; }
-  else {
+  const cached = await idb.get('inbox1:' + ROOT.id);
+  if (cached && cached.raw && !INBOX_RAW.length) {          // show last time's list straight away
+    INBOX_RAW = cached.raw.filter(r => !COPIED.has(r[0])); INBOX_WHEN = cached.when;
+    ITEMS = processCatalog(RAW); apply({ keepGrid: true });
+  }
+  {
     await refresh(true);                                  // make sure recent copies into Photos-Priv count as organized
     const have = new Set(RAW.map(r => r[1].toLowerCase() + '|' + r[3]));     // same name + size = already organized
     const out = [];
@@ -2639,7 +2720,7 @@ async function loadInbox(force = false) {
       try {
         const it = await graph('/me/drive/root:/' + path.split('/').map(encodeURIComponent).join('/') + '?$select=id,name,parentReference');
         const label = path.split('/').pop();
-        const rows = await crawl({ driveId: it.parentReference.driveId, id: it.id }, () => {});
+        const rows = (await deltaList({ driveId: it.parentReference.driveId, id: it.id })).filter(r => !COPIED.has(r[0]));
         for (const r of rows) if (!have.has(r[1].toLowerCase() + '|' + r[3])) { r[2] = INBOX + '/' + label + (r[2] ? '/' + r[2] : ''); out.push(r); }
       } catch (e) { console.warn('Phone folder not available:', path, e.message); }
     }
@@ -2657,7 +2738,7 @@ async function startCatalog() {
   const cached = await idb.get(catalogKey());
   if (cached && cached.raw) {
     useCatalog(cached.raw, cached.when);
-    if (Date.now() - cached.when > REFRESH_AFTER) refresh(true);
+    refresh(true);                                        // cheap now (only changes are fetched)
   } else {
     await refresh(false);
   }
