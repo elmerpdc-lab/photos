@@ -3069,7 +3069,7 @@ function invUSD(d) {
   return `
     <div class="b-kpis">
       ${kpi('Net liquidity', f(t['Net Liquidity'] || 0))}
-      ${kpi('Day change', plus(t['Day Change'] || 0, f))}
+      ${kpi('Capital', f(t.Capital || 0))}
       ${kpi('Unrealized', plus(t.Unrealized || 0, f))}
       ${kpi('Realized', plus(t.Realized || 0, f), `Trading ${f(t['Trading Profit'] || 0)}, dividends ${f(t.Dividends || 0)}, interest ${f(t.Interests || 0)}`)}
       ${kpi('Cash', f(t.Cash || 0))}
@@ -3109,7 +3109,7 @@ function invPHP(d) {
   return `
     <div class="b-kpis">
       ${kpi('Net liquidity', f(t['Net Liquidity'] || 0))}
-      ${kpi('Day change', plus(t['Day Change'] || 0, f))}
+      ${kpi('Capital', f(t.Capital || 0))}
       ${kpi('Unrealized', plus(t.Unrealized || 0, f))}
       ${kpi('Realized', plus(t.Realized || 0, f), `Trading ${f(t['Trading Profit'] || 0)}, dividends ${f(t.Dividends || 0)}`)}
       ${kpi('Cash', f(t.Cash || 0))}
@@ -3132,9 +3132,9 @@ function invSGD(d) {
   return `
     <div class="b-kpis">
       ${kpi('Net liquidity', f(t['Net Liquidity'] || 0), r0['Peso Value'] != null ? phpFmt(r0['Peso Value']) : '')}
+      ${kpi('Capital', f(t.Capital || 0))}
       ${kpi('Unrealized', plus(t.Unrealized || 0, f))}
       ${kpi('Realized', plus(t.Realized || 0, f), `Dividends ${f(t.Dividends || 0)}`)}
-      ${kpi('Capital', f(t.Capital || 0))}
     </div>
     <div class="b-card"><h3>Account</h3>${invTable(a, [['Account Alias', 'text', { label: 'Account' }], ['Broker', 'text'], ['Account Number', 'text', { hide: 1, label: 'Number' }], ['Net Liquidity', 'money'], ['Capital', 'money', { hide: 1 }], ['Unrealized', 'signed'], ['Account Start', 'date', { hide: 1, label: 'Started' }]], f, { noTotal: true })}</div>
     <div class="pd-facts">${metricCard(d.metrics)}</div>
