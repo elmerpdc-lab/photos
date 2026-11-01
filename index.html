@@ -2515,7 +2515,7 @@ function setTab(tab) {
    ever in this page or on GitHub, and OneDrive decides who can open it. Excel stays the place to
    edit: this tab only reads the values Excel last saved.
    ===================================================================== */
-const B = { data: null, eTag: '', saved: '', month: '', q: '', cat: '', person: '', source: '', type: '', excl: false, busy: false };
+const B = { data: null, eTag: '', saved: '', month: '', q: '', cat: '', person: '', source: '', type: '', busy: false };
 const budgetAllowed = () => !!CFG.budgetFile && filesAllowed();
 const money = (n, dp = 0) => (n == null || isNaN(n) ? '' : (+n).toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp }));
 const serialDate = n => new Date(Math.round((n - 25569) * 864e5));
@@ -2613,58 +2613,58 @@ function renderBudget() {
   const months = [...new Set(d.tx.filter(t => t.type !== 'Excluded' && t.ym).map(t => t.ym))].sort();
   if (!months.includes(B.month)) B.month = months[months.length - 1] || '';
   if (TAB === 'budget') writeBudgetHash();
-  const saved = B.saved ? ' · Workbook last saved ' + new Date(B.saved).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
-  $('#bSub').textContent = 'Amounts in MYR, from ' + (CFG.budgetFile.path.split('/').pop()) + saved;
+  const saved = B.saved ? ' · Last updated ' + new Date(B.saved).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+  $('#bSub').textContent = 'MYR' + saved;
   const inMonth = d.tx.filter(t => t.ym === B.month), spent = inMonth.filter(t => t.type !== 'Excluded');
   const reg = spent.filter(t => t.type !== 'One-off'), one = spent.filter(t => t.type === 'One-off');
   const total = t => t.reduce((a, x) => a + x.myr, 0);
-  const regT = total(reg), oneT = total(one), diff = regT - d.avgTotal;
+  const actualT = total(spent), regT = total(reg), oneT = total(one);
   const left = d.salary.find(r => /^Left over/i.test(r.label));
-  const regBy = sumBy(reg, t => t.cat), oneBy = sumBy(one, t => t.cat);
-  const rowsC = d.cats.map(c => ({ ...c, reg: regBy.get(c.name) || 0, one: oneBy.get(c.name) || 0 })).filter(c => c.reg || c.one || c.avg);
-  const scale = Math.max(1, ...rowsC.map(c => Math.max(c.reg, c.avg)));
+  const actualBy = sumBy(spent, t => t.cat), oneBy = sumBy(one, t => t.cat);
+  const rowsC = d.cats.map(c => ({ ...c, actual: actualBy.get(c.name) || 0, one: oneBy.get(c.name) || 0 })).filter(c => c.actual || c.one || c.avg);
+  const scale = Math.max(1, ...rowsC.map(c => Math.max(c.actual, c.avg)));
   const vs = (a, b) => { const x = a - b; return Math.abs(x) < 0.5 ? '<span class="b-under">on average</span>' : x > 0 ? `<span class="b-over">▲ ${money(x)} over</span>` : `<span class="b-under">▼ ${money(-x)} under</span>`; };
   const small = (title, m) => `<div class="b-card"><h3>${esc(title)}</h3><table class="b-t"><tbody>${[...m].sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).map(([k, v]) => `<tr><td>${esc(k || 'Not set')}</td><td class="r">${money(v)}</td></tr>`).join('') || '<tr><td>None</td></tr>'}</tbody></table></div>`;
   const pct = n => (n == null ? '' : Math.round(n * 100) + '%');
   const salaryBold = /^(Gross pay|Net pay|Total deductions|Total to allocate|Left over|Yearly)/i;
-  const rawTable = rows => { const w = Math.max(...rows.map(r => r.length)); return `<div class="b-scroll"><table class="b-t"><tbody>${rows.map(r => {
+  const rawTable = all => {
+    const heads = all.find(r => r.includes('Notes')), noteCol = heads ? heads.indexOf('Notes') : -1;
+    const rows = all.filter(r => r.filter(v => v != null).length > 1).map(r => r.filter((v, i) => i !== noteCol));   // no title or note lines
+    const w = Math.max(...rows.map(r => r.length)); return `<div class="b-scroll"><table class="b-t"><tbody>${rows.map(r => {
     const vals = r.filter(v => v != null);
-    if (vals.length === 1) return `<tr><td colspan="${w}">${esc(String(vals[0]))}</td></tr>`;
     const isHead = vals.length >= 3 && vals.every(v => typeof v === 'string');
     return '<tr>' + Array.from({ length: w }, (_, i) => { const v = r[i]; return isHead ? `<th>${esc(v == null ? '' : String(v))}</th>` : typeof v === 'number' ? `<td class="r">${money(v, Number.isInteger(v) ? 0 : 2)}</td>` : `<td>${esc(v == null ? '' : String(v))}</td>`; }).join('') + '</tr>'; }).join('')}</tbody></table></div>`; };
   const opt = (name, label, list) => `<select data-bf="${name}" aria-label="${label}"><option value="">${label}: all</option>${list.map(v => `<option value="${esc(v)}"${B[name] === v ? ' selected' : ''}>${esc(v)}</option>`).join('')}</select>`;
   const uniq = k => [...new Set(d.tx.map(t => t[k]).filter(Boolean))].sort();
   $('#bBody').innerHTML = `
-    ${d.status ? `<p class="b-sub"><b>Data status:</b> ${esc(d.status)}</p>` : ''}
     ${d.check && d.check !== 'OK' ? `<div class="b-state">The workbook's own check says: ${esc(d.check)}</div>` : ''}
     <div class="b-months" role="group" aria-label="Month">${months.map(m => `<button data-bm="${m}" class="${m === B.month ? 'on' : ''}">${ymLabel(m)}</button>`).join('')}</div>
     <div class="b-kpis">
-      <div class="b-kpi"><div class="l">Spent in ${ymLabel(B.month)}</div><div class="v">${money(total(spent))}</div><div class="n">PHP ${money(spent.reduce((a, x) => a + x.php, 0))}</div></div>
-      <div class="b-kpi"><div class="l">Regular spending</div><div class="v">${money(regT)}</div><div class="n">${vs(regT, d.avgTotal)} the ${money(d.avgTotal)} monthly average</div></div>
-      <div class="b-kpi"><div class="l">One-offs</div><div class="v">${money(oneT)}</div><div class="n">Not compared with the average</div></div>
-      ${left ? `<div class="b-kpi"><div class="l">${left.myr < 0 ? 'Monthly shortfall' : 'Monthly left over'} (estimate)</div><div class="v">${money(Math.abs(left.myr))}</div><div class="n">From the salary allocation below</div></div>` : ''}
+      <div class="b-kpi"><div class="l">Actual spending in ${ymLabel(B.month)}</div><div class="v">${money(actualT)}</div><div class="n">PHP ${money(spent.reduce((a, x) => a + x.php, 0))}</div></div>
+      <div class="b-kpi"><div class="l">Monthly avg</div><div class="v">${money(d.avgTotal)}</div><div class="n">Actual is ${vs(actualT, d.avgTotal)}</div></div>
+      <div class="b-kpi"><div class="l">One-offs, included in actual</div><div class="v">${money(oneT)}</div><div class="n">Without them, actual is ${money(regT)}</div></div>
+      ${left ? `<div class="b-kpi"><div class="l">${left.myr < 0 ? 'Monthly shortfall' : 'Monthly left over'} (estimate)</div><div class="v">${money(Math.abs(left.myr))}</div></div>` : ''}
     </div>
     <div class="b-card">
       <h3>Spending against Monthly avg</h3>
-      <p class="note">Bar: regular spending in ${ymLabel(B.month)}. Tick: Monthly avg from the tracker. Select a category to filter the transactions below.</p>
+      <p class="note">Bar: actual. Tick: Monthly avg.</p>
       <div class="b-scroll"><table class="b-t">
-        <thead><tr><th>Category</th><th class="r">Regular</th><th class="r b-hide-m">One-off</th><th class="r">Monthly avg</th><th class="r">Against avg</th><th class="b-hide-m">Compared</th></tr></thead>
-        <tbody>${rowsC.map(c => `<tr class="${B.cat === c.name ? 'b-sel' : ''}" title="${esc(c.name)}: regular ${money(c.reg, 2)}, one-off ${money(c.one, 2)}, monthly avg ${money(c.avg, 2)}">
-          <td><button class="b-link" data-bcat="${esc(c.name)}">${esc(c.name)}</button></td><td class="r">${money(c.reg)}</td><td class="r b-hide-m">${c.one ? money(c.one) : ''}</td><td class="r">${money(c.avg)}</td><td class="r">${vs(c.reg, c.avg)}</td>
-          <td class="b-hide-m"><div class="b-bar"><i style="width:${c.reg / scale * 100}%"></i>${c.avg ? `<b style="left:${c.avg / scale * 100}%"></b>` : ''}</div></td></tr>`).join('')}
-          <tr class="tot"><td>Total</td><td class="r">${money(regT)}</td><td class="r b-hide-m">${money(oneT)}</td><td class="r">${money(d.avgTotal)}</td><td class="r">${vs(regT, d.avgTotal)}</td><td class="b-hide-m"></td></tr></tbody>
+        <thead><tr><th>Category</th><th class="r">Actual</th><th class="r">Of which one-off</th><th class="r">Monthly avg</th><th class="r">Against avg</th><th class="b-hide-m">Compared</th></tr></thead>
+        <tbody>${rowsC.map(c => `<tr class="${B.cat === c.name ? 'b-sel' : ''}" title="${esc(c.name)}: actual ${money(c.actual, 2)}, of which one-off ${money(c.one, 2)}, monthly avg ${money(c.avg, 2)}">
+          <td><button class="b-link" data-bcat="${esc(c.name)}">${esc(c.name)}</button></td><td class="r">${money(c.actual)}</td><td class="r">${c.one ? money(c.one) : ''}</td><td class="r">${money(c.avg)}</td><td class="r">${vs(c.actual, c.avg)}</td>
+          <td class="b-hide-m"><div class="b-bar"><i style="width:${c.actual / scale * 100}%"></i>${c.avg ? `<b style="left:${c.avg / scale * 100}%"></b>` : ''}</div></td></tr>`).join('')}
+          <tr class="tot"><td>Total</td><td class="r">${money(actualT)}</td><td class="r">${money(oneT)}</td><td class="r">${money(d.avgTotal)}</td><td class="r">${vs(actualT, d.avgTotal)}</td><td class="b-hide-m"></td></tr></tbody>
       </table></div>
     </div>
     <div class="b-3">${small('By person', sumBy(spent, t => t.person))}${small('By source', sumBy(spent, t => t.source))}${small('Not counted as expense', sumBy(inMonth.filter(t => t.type === 'Excluded'), t => t.cat))}</div>
     <div class="b-card">
       <h3>Transactions</h3>
-      <div class="b-filters">${opt('cat', 'Category', uniq('cat'))}${opt('person', 'Person', uniq('person'))}${opt('source', 'Source', uniq('source'))}${opt('type', 'Type', uniq('type').filter(t => t !== 'Excluded'))}
-        <label><input type="checkbox" id="bExcl"${B.excl ? ' checked' : ''}> Include not counted</label><span class="sum" id="bTxSum"></span></div>
+      <div class="b-filters">${opt('cat', 'Category', uniq('cat'))}${opt('person', 'Person', uniq('person'))}${opt('source', 'Source', uniq('source'))}${opt('type', 'Type', uniq('type').filter(t => t !== 'Excluded'))}<span class="sum" id="bTxSum"></span></div>
       <div class="b-scroll"><table class="b-t"><thead><tr><th>Date</th><th>Merchant</th><th>Category</th><th class="b-hide-m">Person</th><th class="b-hide-m">Source</th><th class="b-hide-m">Type</th><th class="r">MYR</th></tr></thead><tbody id="bTx"></tbody></table></div>
     </div>
     ${d.salary.length ? `<div class="b-card"><h3>Salary allocation (estimate)</h3>
-      <div class="b-scroll"><table class="b-t"><thead><tr><th>Item</th><th class="r">MYR a month</th><th class="r b-hide-m">PHP a month</th><th class="r b-hide-m">Rate or share</th><th class="b-hide-m">Basis</th></tr></thead>
-      <tbody>${d.salary.map(r => `<tr class="${salaryBold.test(r.label) ? 'tot' : ''}"><td>${esc(r.label)}</td><td class="r">${money(r.myr)}</td><td class="r b-hide-m">${money(r.php)}</td><td class="r b-hide-m">${pct(r.rate)}</td><td class="b-hide-m">${esc(r.basis)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
+      <div class="b-scroll"><table class="b-t"><thead><tr><th>Item</th><th class="r">MYR a month</th><th class="r b-hide-m">PHP a month</th><th class="r b-hide-m">Rate or share</th></tr></thead>
+      <tbody>${d.salary.map(r => `<tr class="${salaryBold.test(r.label) ? 'tot' : ''}"><td>${esc(r.label)}</td><td class="r">${money(r.myr)}</td><td class="r b-hide-m">${money(r.php)}</td><td class="r b-hide-m">${pct(r.rate)}</td></tr>`).join('')}</tbody></table></div></div>` : ''}
     ${d.commitments.length ? `<details class="b-card"><summary>Monthly commitments</summary>${rawTable(d.commitments)}</details>` : ''}
     ${d.uow.length ? `<details class="b-card"><summary>UOW fees</summary>${rawTable(d.uow)}</details>` : ''}`;
   renderBudgetTx();
@@ -2673,11 +2673,11 @@ function renderBudget() {
 function renderBudgetTx() {
   const d = B.data, body = $('#bTx'); if (!d || !body) return;
   const q = B.q.toLowerCase();
-  const list = d.tx.filter(t => t.ym === B.month && (B.excl || t.type !== 'Excluded') && (!B.cat || t.cat === B.cat) && (!B.person || t.person === B.person)
+  const list = d.tx.filter(t => t.ym === B.month && t.type !== 'Excluded' && (!B.cat || t.cat === B.cat) && (!B.person || t.person === B.person)
     && (!B.source || t.source === B.source) && (!B.type || t.type === B.type)
-    && (!q || [t.merchant, t.desc, t.cat, t.person, t.source, t.note].join(' ').toLowerCase().includes(q)));
+    && (!q || [t.merchant, t.desc, t.cat, t.person, t.source].join(' ').toLowerCase().includes(q)));
   body.innerHTML = list.map(t => `<tr><td style="white-space:nowrap">${serialDate(t.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</td>
-    <td>${esc(t.merchant)}${t.note ? `<small>${esc(t.note)}</small>` : ''}${t.ccy && t.ccy !== 'MYR' && t.orig != null ? `<small>${esc(t.ccy)} ${money(t.orig, 2)}</small>` : ''}</td>
+    <td>${esc(t.merchant)}</td>
     <td>${esc(t.cat)}</td><td class="b-hide-m">${esc(t.person)}</td><td class="b-hide-m">${esc(t.source)}</td><td class="b-hide-m">${esc(t.type)}</td><td class="r">${money(t.myr, 2)}</td></tr>`).join('')
     || '<tr><td colspan="7">No transactions match.</td></tr>';
   $('#bTxSum').textContent = `${fmtN(list.length)} item${list.length === 1 ? '' : 's'} · MYR ${money(list.reduce((a, t) => a + t.myr, 0), 2)}`;
@@ -2691,7 +2691,6 @@ function bindBudgetUI() {
     if (c) { B.cat = B.cat === c.dataset.bcat ? '' : c.dataset.bcat; const y = scrollY; renderBudget(); scrollTo(0, y); }
   });
   $('#bBody').addEventListener('change', e => {
-    if (e.target.id === 'bExcl') { B.excl = e.target.checked; return renderBudgetTx(); }
     const k = e.target.dataset.bf; if (!k) return;
     B[k] = e.target.value;
     if (k === 'cat') { const y = scrollY; renderBudget(); scrollTo(0, y); } else renderBudgetTx();
