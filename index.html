@@ -2676,11 +2676,20 @@ function renderBudgetTx() {
   const list = d.tx.filter(t => t.ym === B.month && t.type !== 'Excluded' && (!B.cat || t.cat === B.cat) && (!B.person || t.person === B.person)
     && (!B.source || t.source === B.source) && (!B.type || t.type === B.type)
     && (!q || [t.merchant, t.desc, t.cat, t.person, t.source].join(' ').toLowerCase().includes(q)));
-  body.innerHTML = list.map(t => `<tr><td style="white-space:nowrap">${serialDate(t.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</td>
+  // Fees paid together to UOW show as one row; the workbook keeps them line by line
+  const rows = [], paid = new Map();
+  for (const t of list) {
+    if (!/^UOW\b/i.test(t.merchant)) { rows.push(t); continue; }
+    const k = [t.date, t.source, t.person, t.cat].join('|'), g = paid.get(k);
+    if (!g) { const first = { ...t, fees: 1 }; paid.set(k, first); rows.push(first); continue; }
+    g.fees++; g.myr += t.myr; g.merchant = `UOW (${g.fees} fees)`;
+    if (g.type !== t.type) g.type = 'Mixed';
+  }
+  body.innerHTML = rows.map(t => `<tr><td style="white-space:nowrap">${serialDate(t.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</td>
     <td>${esc(t.merchant)}</td>
     <td>${esc(t.cat)}</td><td class="b-hide-m">${esc(t.person)}</td><td class="b-hide-m">${esc(t.source)}</td><td class="b-hide-m">${esc(t.type)}</td><td class="r">${money(t.myr, 2)}</td></tr>`).join('')
     || '<tr><td colspan="7">No transactions match.</td></tr>';
-  $('#bTxSum').textContent = `${fmtN(list.length)} item${list.length === 1 ? '' : 's'} · MYR ${money(list.reduce((a, t) => a + t.myr, 0), 2)}`;
+  $('#bTxSum').textContent = `${fmtN(rows.length)} item${rows.length === 1 ? '' : 's'} · MYR ${money(list.reduce((a, t) => a + t.myr, 0), 2)}`;
 }
 
 function bindBudgetUI() {
