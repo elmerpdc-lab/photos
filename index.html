@@ -2710,9 +2710,9 @@ function bindBudgetUI() {
    in this page or on GitHub). Read-only: it shows the values Excel last saved. Sections are found by their
    labels, so added rows don't break anything. Downloaded only when the file has changed.
    ===================================================================== */
-const PD_TABS = ['props', 'ins', 'rwd', 'inv', 'acct'], PD_V = 5;   // bump PD_V when parsePD changes, so saved copies are re-read
-const P = { data: null, eTag: '', saved: '', checked: 0, root: null, busy: false, prop: 'overview', sched: 'next', q: '', rtype: '', rall: false, ill: 0, inv: 'usd', hold: '', pstk: '', pfnd: '', acClass: '', acZero: false, acSort: { k: 'Peso Value', d: -1 }, open: {} };
-const pdAllowed = tab => { const c = CFG.personalFile; return !DEMO && !!c && (OWNER || !(c.ownerOnly || (c.ownerOnlyTabs || []).includes(tab))) && filesAllowed(); };
+const PD_TABS = ['props', 'ins', 'rwd', 'inv', 'acct'], PD_V = 6;   // bump PD_V when parsePD changes, so saved copies are re-read
+const P = { data: null, eTag: '', saved: '', checked: 0, root: null, busy: false, prop: 'overview', sched: 'next', q: '', rtype: '', rall: false, ill: 0, inv: 'usd', hold: '', pstk: '', pfnd: '', acOwner: '', acClass: '', acZero: false, acSort: { k: 'Peso Value', d: -1 }, open: {} };
+const pdAllowed = tab => { const c = CFG.personalFile; return !!c && (OWNER || !(c.ownerOnly || (c.ownerOnlyTabs || []).includes(tab))) && filesAllowed(); };
 const dayLabel = n => (typeof n === 'number' ? serialDate(n).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '');
 const php = (n, dp = 0) => '₱' + money(n, dp);
 const rm = (n, dp = 0) => 'RM ' + money(n, dp);
@@ -2815,8 +2815,9 @@ function parseAccounts(wb) {
   const a = pdGrid(wb, 'accounts'), i = rowOf(a, 0, 'ACCOUNTS DETAILS');
   const h = i < 0 ? -1 : a.findIndex((r, n) => n >= i && r && clean(r[0]) === 'Asset Class');
   if (h < 0) return [];
-  const owner = CFG.personalFile.accountsOwner, keep = ['Asset Class', 'Subclass', 'Institution', 'Account Type', 'Purpose', 'Currency', 'Current Amount', 'Peso Value'];
-  return pdObjs(pdTable(a, h, 0)).rows.filter(r => r['Account Owner'] === owner).map(r => {
+  const owner = CFG.personalFile.accountsOwner, keep = ['Account Owner', 'Asset Class', 'Subclass', 'Institution', 'Account Type', 'Purpose', 'Currency', 'Current Amount', 'Peso Value'];
+  // Only the dashboard owner gets other people's accounts (Ellie, Evan); family members never receive those rows
+  return pdObjs(pdTable(a, h, 0)).rows.filter(r => OWNER ? r['Account Owner'] && r['Account Owner'] !== 'Total' : r['Account Owner'] === owner).map(r => {
     const o = {};
     for (const k of keep) o[k] = typeof r[k] === 'string' ? r[k].trim() : r[k];
     o['Peso Value'] = +o['Peso Value'] || 0; o['Current Amount'] = +o['Current Amount'] || 0;
@@ -2852,7 +2853,16 @@ async function loadPD(force = false) {
   const say = t => { state.textContent = t; state.hidden = !t; };
   P.busy = true; btn.classList.add('spin');
   try {
-    const key = 'pd1:' + cfg.path;
+    const key = 'pd1:' + (OWNER ? 'owner:' : '') + cfg.path;
+    if (DEMO) {                                           // preview with a local copy (demo-pd.xlsx, never uploaded)
+      if (!P.data) {
+        if (!window.XLSX) await loadJs(CDNJS + 'xlsx/0.18.5/xlsx.full.min.js');
+        const r = await fetch('demo-pd.xlsx');
+        if (!r.ok) throw new Error('No demo-pd.xlsx');
+        P.data = parsePD(XLSX.read(await r.arrayBuffer(), { type: 'array', sheets: ['real', 'shr', 'upt', 'ser', 'car', 'ins', 'rwd', 'usd', 'php', 'sgd', 'accounts'] }));
+      }
+      say(''); renderPD(); return;
+    }
     if (!P.data) {
       const c = await idb.get(key);
       if (c && c.data && c.data.v === PD_V) { P.data = c.data; P.eTag = c.eTag; P.saved = c.saved; P.checked = c.checked || 0; P.root = c.root; renderPD(); }
@@ -3166,7 +3176,10 @@ function acRanked(title, note, rows, keyOf, assets, top = 6) {
   }).join('')}</div></div>`;
 }
 function renderAcct() {
-  const all = P.data.acct || [];
+  const mine = CFG.personalFile.accountsOwner, every = P.data.acct || [];
+  const owners = OWNER ? [...new Set(every.map(r => r['Account Owner']))].sort((a, b) => (a === mine ? -1 : b === mine ? 1 : a.localeCompare(b))) : [];
+  if (!owners.includes(P.acOwner)) P.acOwner = '';
+  const all = every.filter(r => OWNER ? !P.acOwner || r['Account Owner'] === P.acOwner : r['Account Owner'] === mine);   // family: never anyone else's
   if (!all.length) return '<div class="b-state">No accounts found for this owner in the workbook.</div>';
   const has = r => Math.abs(r['Peso Value']) >= 0.5;
   const live = all.filter(has), assetsRows = live.filter(r => r['Peso Value'] > 0), debts = live.filter(r => r['Peso Value'] < 0);
@@ -3179,13 +3192,14 @@ function renderAcct() {
   for (const r of assetsRows) { const k = shortName(r.Institution); byInst.set(k, (byInst.get(k) || 0) + r['Peso Value']); }
   const [topName, topVal] = [...byInst].sort((a, b) => b[1] - a[1])[0] || ['', 0];
   const foreign = assetsRows.filter(r => r.Currency !== 'PHP'), cash = sum(live.filter(r => r['Asset Class'] === 'Cash'));
-  const q = P.q.toLowerCase(), cols = [['Asset Class'], ['Subclass'], ['Institution'], ['Account Type'], ['Purpose'], ['Currency'], ['Current Amount', 0, 'Amount (local)'], ['Peso Value', 0, 'Peso value']];
-  const list = (P.acZero ? all : live).filter(r => (!P.acClass || r['Asset Class'] === P.acClass) && (!q || [r['Asset Class'], r.Subclass, r.Institution, r['Account Type'], r.Purpose, r.Currency].join(' ').toLowerCase().includes(q)));
+  const q = P.q.toLowerCase(), cols = [...(OWNER && !P.acOwner ? [['Account Owner', 0, 'Owner']] : []), ['Asset Class'], ['Subclass'], ['Institution'], ['Account Type'], ['Purpose'], ['Currency'], ['Current Amount', 0, 'Amount (local)'], ['Peso Value', 0, 'Peso value']];
+  const list = (P.acZero ? all : live).filter(r => (!P.acClass || r['Asset Class'] === P.acClass) && (!q || [r['Account Owner'], r['Asset Class'], r.Subclass, r.Institution, r['Account Type'], r.Purpose, r.Currency].join(' ').toLowerCase().includes(q)));
   const { k, d } = P.acSort;
   list.sort((a, b) => (typeof a[k] === 'number' ? a[k] - b[k] : String(a[k] ?? '').localeCompare(String(b[k] ?? ''))) * d);
   const num = h => /Amount|Value/.test(h);
   return `
-    ${CFG.personalFile.accountsNote ? `<p class="b-sub" style="margin:-4px 0 12px">${esc(CFG.personalFile.accountsNote)}</p>` : ''}
+    ${owners.length > 1 ? `<div class="b-months" role="group" aria-label="Owner" style="margin-top:0"><button data-acowner="" class="${P.acOwner ? '' : 'on'}">All</button>${owners.map(o => `<button data-acowner="${esc(o)}" class="${P.acOwner === o ? 'on' : ''}">${esc(o)}</button>`).join('')}<span class="b-sub" style="align-self:center">Only you see other owners</span></div>` : ''}
+    ${CFG.personalFile.accountsNote && (!OWNER || P.acOwner === mine) ? `<p class="b-sub" style="margin:-4px 0 12px">${esc(CFG.personalFile.accountsNote)}</p>` : ''}
     <div class="b-kpis">
       ${kpi('Net worth', php(net), `${fmtN(live.length)} accounts with a balance`)}
       ${kpi('Total assets', php(assets))}
@@ -3233,10 +3247,11 @@ function bindPDUI() {
     if (e.target.matches && e.target.querySelector('[data-pill]')) P.illOpen = e.target.open;
   }, true);
   $('#pdBody').addEventListener('click', e => {
-    const a = e.target.closest('[data-pprop],[data-psched],[data-pill],[data-prtype],[data-pinv],[data-phold],[data-pstk],[data-pfnd],[data-acclass],[data-acsort]'); if (!a) return;
+    const a = e.target.closest('[data-pprop],[data-psched],[data-pill],[data-prtype],[data-pinv],[data-phold],[data-pstk],[data-pfnd],[data-acclass],[data-acsort],[data-acowner]'); if (!a) return;
     const y = scrollY;
     if (a.dataset.pinv) { P.inv = a.dataset.pinv; P.hold = ''; renderPD(); return scrollTo(0, 0); }
     if (a.dataset.phold !== undefined) P.hold = a.dataset.phold;
+    if (a.dataset.acowner !== undefined) { P.acOwner = a.dataset.acowner; P.acClass = ''; }
     if (a.dataset.acclass !== undefined) P.acClass = P.acClass === a.dataset.acclass ? '' : a.dataset.acclass;
     if (a.dataset.acsort) { const k = a.dataset.acsort; P.acSort = P.acSort.k === k ? { k, d: -P.acSort.d } : { k, d: /Value|Amount/.test(k) ? -1 : 1 }; }
     if (a.dataset.pstk !== undefined) P.pstk = a.dataset.pstk;
@@ -3787,14 +3802,16 @@ async function main() {
   if (DEMO) {
     ROOT = { driveId: 'demo', id: 'demo', name: 'Photos' };
     OWNER = new URLSearchParams(location.search).has('owner');   // preview the owner tools (actions need a real sign-in)
-    $('#tabs').hidden = !OWNER;
+    const demoFamily = new URLSearchParams(location.search).has('family');   // preview what a family member sees
+    $('#tabs').hidden = !(OWNER || demoFamily);
+    PD_TABS.forEach(t => { $(`#tabs [data-tab="${t}"]`).hidden = !pdAllowed(t); });
     $('#whoName').textContent = 'Demo'; $('#avatar').textContent = 'D'; $('#btnSignOut').textContent = $('#btnSignOut3').textContent = 'Exit demo';
     loading('Loading demo…', 'Reading demo.json');
     try {
       const f = new URLSearchParams(location.search).get('demo');
       const raw = await (await fetch(/^[\w-]+\.json$/.test(f) ? f : 'demo.json')).json();
       useCatalog(raw, Date.now());
-      if (OWNER && TAB_WANTED !== 'photos') setTab(TAB_WANTED);
+      if ((OWNER || demoFamily) && TAB_WANTED !== 'photos') setTab(TAB_WANTED);
     } catch (e) { fail(new Error('demo.json not found. Run make_demo.py to create it.')); }
     return;
   }
