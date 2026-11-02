@@ -3075,7 +3075,13 @@ const invSearch = (r, keys) => !P.q || keys.map(k => r[k] ?? '').join(' ').toLow
 const metricCard = (list) => (list.length ? `<div class="b-card"><h3>Returns</h3>${list.map(f => `<div class="pd-fact"><span>${esc(f.label)}</span><b>${pct2(f.v)}</b></div>`).join('')}</div>` : '');
 
 function invUSD(d) {
-  const a = d.accounts, t = a.total || {}, alias = {};
+  // Owner only: other people's IBKR balances, from the Accounts sheet (totals only; their holdings aren't in the workbook)
+  const mine = CFG.personalFile.accountsOwner;
+  const others = OWNER ? (P.data.acct || []).filter(r => r['Account Owner'] !== mine && /^IBKR/i.test(r.Institution || '') && r.Currency === 'USD' && Math.abs(r['Current Amount']) >= 0.5) : [];
+  const othersT = others.reduce((x, r) => x + r['Current Amount'], 0);
+  const a = { ...d.accounts, rows: [...d.accounts.rows, ...others.map(r => ({ 'Account Alias': `${r['Account Owner']} (total only)`, 'Net Liquidity': r['Current Amount'], Broker: 'IBKR' }))],
+    total: d.accounts.total && { ...d.accounts.total, 'Net Liquidity': (d.accounts.total['Net Liquidity'] || 0) + othersT } };
+  const t = d.accounts.total || {}, alias = {};
   a.rows.forEach(r => { alias[r['Account Number']] = r['Account Alias']; });
   const f = usdFmt, withAlias = d.holds.map(r => ({ ...r, Alias: alias[r.Account] || r.Account }));
   const names = [...new Set(withAlias.map(r => r.Alias))];
@@ -3086,7 +3092,7 @@ function invUSD(d) {
   const openOpts = d.options.rows.filter(r => +r.Contracts);
   return `
     <div class="b-kpis">
-      ${kpi('Net liquidity', f(t['Net Liquidity'] || 0))}
+      ${kpi('Net liquidity', f(t['Net Liquidity'] || 0), others.length ? `${f((t['Net Liquidity'] || 0) + othersT)} with ${others.map(r => esc(r['Account Owner'])).join(', ')}` : '')}
       ${kpi('Capital', f(t.Capital || 0))}
       ${kpi('Unrealized', plus(t.Unrealized || 0, f))}
       ${kpi('Realized', plus(t.Realized || 0, f), `Trading ${f(t['Trading Profit'] || 0)}, dividends ${f(t.Dividends || 0)}, interest ${f(t.Interests || 0)}`)}
