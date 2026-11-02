@@ -2022,13 +2022,14 @@ let selectMode = false, selAnchor = -1;
 const selecting = () => OWNER && (selectMode || S.review);
 
 async function detectOwner() {
-  OWNER = false; PRIVROOT = null;
-  if (DEMO || !CFG.privatePath) return;
-  try {
+  // Set both at the end, so other code never sees a brief "not the owner" while this check is running
+  let owner = false, privRoot = null;
+  if (!DEMO && CFG.privatePath) try {
     const [me, priv] = await Promise.all([graph('/me/drive?$select=id'), privateRoot(false).catch(() => null)]);
-    OWNER = me.id.toLowerCase() === ROOT.driveId.toLowerCase();
-    PRIVROOT = OWNER ? priv : null;
+    owner = me.id.toLowerCase() === ROOT.driveId.toLowerCase();
+    privRoot = owner ? priv : null;
   } catch {}
+  OWNER = owner; PRIVROOT = privRoot;
 }
 async function loadReview() {
   if (!OWNER) return;
@@ -2710,7 +2711,7 @@ function bindBudgetUI() {
    in this page or on GitHub). Read-only: it shows the values Excel last saved. Sections are found by their
    labels, so added rows don't break anything. Downloaded only when the file has changed.
    ===================================================================== */
-const PD_TABS = ['props', 'ins', 'rwd', 'inv', 'acct'], PD_V = 6;   // bump PD_V when parsePD changes, so saved copies are re-read
+const PD_TABS = ['props', 'ins', 'rwd', 'inv', 'acct'], PD_V = 7;   // bump PD_V when parsePD changes, so saved copies are re-read
 const P = { data: null, eTag: '', saved: '', checked: 0, root: null, busy: false, prop: 'overview', sched: 'next', q: '', rtype: '', rall: false, ill: 0, inv: 'usd', hold: '', pstk: '', pfnd: '', acOwner: '', acClass: '', acZero: false, acSort: { k: 'Peso Value', d: -1 }, open: {} };
 const pdAllowed = tab => { const c = CFG.personalFile; return !!c && (OWNER || !(c.ownerOnly || (c.ownerOnlyTabs || []).includes(tab))) && filesAllowed(); };
 const dayLabel = n => (typeof n === 'number' ? serialDate(n).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '');
@@ -2839,7 +2840,7 @@ function parsePD(wb) {
     if (h >= 0 && h - i < 6) ills.push({ title: t, table: pdTable(ins, h, 0) });
   });
   const rw = pdGrid(wb, 'rwd'), iW = rowOf(rw, 0, 'Membership ID');
-  return { v: PD_V,
+  return { v: PD_V, owner: OWNER,
     real: { props: pdTable(real, iP, 0), tx: pdTable(real, iT, 0, 14), returns: iR >= 0 ? pdFacts(real, iR + 1, real.length, 0).flat() : [] },
     shr: pdProperty(wb, 'shr'), upt: pdProperty(wb, 'upt'), ser: pdProperty(wb, 'ser'),
     car: { vehicles: pdTable(car, iV, 0, 13), loan, schedule: iNo >= 0 ? pdTable(car, iL, iNo, 7) : null },
@@ -2854,6 +2855,7 @@ async function loadPD(force = false) {
   P.busy = true; btn.classList.add('spin');
   try {
     const key = 'pd1:' + (OWNER ? 'owner:' : '') + cfg.path;
+    if (P.data && P.data.owner !== OWNER) { P.data = null; P.eTag = null; }   // read for the other view: start again
     if (DEMO) {                                           // preview with a local copy (demo-pd.xlsx, never uploaded)
       if (!P.data) {
         if (!window.XLSX) await loadJs(CDNJS + 'xlsx/0.18.5/xlsx.full.min.js');
@@ -2865,7 +2867,7 @@ async function loadPD(force = false) {
     }
     if (!P.data) {
       const c = await idb.get(key);
-      if (c && c.data && c.data.v === PD_V) { P.data = c.data; P.eTag = c.eTag; P.saved = c.saved; P.checked = c.checked || 0; P.root = c.root; renderPD(); }
+      if (c && c.data && c.data.v === PD_V && c.data.owner === OWNER) { P.data = c.data; P.eTag = c.eTag; P.saved = c.saved; P.checked = c.checked || 0; P.root = c.root; renderPD(); }
       else say('Opening the personal dashboard workbook…');
     }
     if (!force && P.data && Date.now() - P.checked < REFRESH_AFTER) { say(''); return; }
@@ -2873,7 +2875,7 @@ async function loadPD(force = false) {
     if (!folder) throw new Error(`"${cfg.folder}" isn't in the shared folder list in config.js.`);
     const root = P.root || await resolveLink(folder.shareUrl);
     const meta = await graph(`/drives/${root.driveId}/items/${root.id}:/${cfg.path.split('/').map(encodeURIComponent).join('/')}`);
-    if (!P.data || meta.eTag !== P.eTag) {
+    if (!P.data || meta.eTag !== P.eTag || P.data.owner !== OWNER) {
       if (!window.XLSX) await loadJs(CDNJS + 'xlsx/0.18.5/xlsx.full.min.js');
       const r = await fetch(meta['@microsoft.graph.downloadUrl']);
       if (!r.ok) throw new Error('Could not download the workbook (' + r.status + ').');
