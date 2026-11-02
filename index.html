@@ -506,7 +506,6 @@ body.building #photosLayout > aside, body.building #photosLayout > main > :not(#
       </div>
       <div class="fgroup" id="catsGroup">
         <h3>More categories</h3>
-        <p class="places-note">Tick <b>Private</b> to mix your private photos in. <b>Only</b> shows just that group, e.g. photos with no tags yet.</p>
         <div id="cats"></div>
       </div>
       <p style="font-size:12px;color:var(--muted)" id="catalogInfo"></p>
@@ -514,7 +513,7 @@ body.building #photosLayout > aside, body.building #photosLayout > main > :not(#
     </aside>
 
     <main>
-      <div class="b-state" id="buildNote" role="status">Your photos will load in the background. You can use the other tabs meanwhile.</div>
+      <div class="b-state" id="buildNote" role="status">Loading photos…</div>
       <div class="summary">
         <button class="btn mobile-only" id="btnFilters2" style="padding:5px 12px">Filters</button>
         <h2 id="viewTitle">All photos</h2>
@@ -2229,7 +2228,7 @@ function renderOwner() {
   $('#btnReview').classList.toggle('on', S.review);
   $('#btnSelect').classList.toggle('on', selectMode);
   $('#btnSelect').hidden = S.review;
-  $('#ownerNote').textContent = `${fmtN(p)} private item${p === 1 ? '' : 's'} in ${PRIV}. Your family can't see them.`;
+  $('#ownerNote').textContent = `${fmtN(p)} private item${p === 1 ? '' : 's'} in ${PRIV}`;
   document.body.classList.toggle('selecting', selecting());
   updateSelbar();
 }
@@ -2355,7 +2354,7 @@ function changeTags(items, tag, add) {
 function renderTags(counts) {
   const has = TAGS.size > 0;
   $('#tagsGroup').hidden = !has && !OWNER;
-  if (!has) { $('#tagsNote').textContent = 'No tags yet. Select photos, then press Tag… to add one.'; $('#tags').innerHTML = ''; return; }
+  if (!has) { $('#tagsNote').textContent = 'No tags yet.'; $('#tags').innerHTML = ''; return; }
   const list = [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   if (S.tag && !counts.has(S.tag)) list.unshift([S.tag, 0]);
   $('#tagsNote').textContent = list.length ? '' : 'None of the photos shown have tags.';
@@ -2718,6 +2717,9 @@ const dayLabel = n => (typeof n === 'number' ? serialDate(n).toLocaleDateString(
 const php = (n, dp = 0) => '₱' + money(n, dp);
 const rm = (n, dp = 0) => 'RM ' + money(n, dp);
 const clean = v => (typeof v === 'string' ? v.trim() : v);
+// Workbook abbreviations shown as full bank names
+const BANKS = [[/\bMB\b/g, 'Metrobank'], [/\bEW\b/g, 'EastWest'], [/\bEastwest\b/g, 'EastWest']];
+const bankName = v => (typeof v === 'string' ? BANKS.reduce((x, [re, name]) => x.replace(re, name), v) : v);
 
 function writePDHash() {
   if (!PD_TABS.includes(TAB)) return;
@@ -2890,13 +2892,13 @@ function factValue(label, v, cur) {
   if (/months|period|years|installments paid|term \(/i.test(label)) return money(v);
   return cur(v, Math.abs(v) < 1000 && !Number.isInteger(v) ? 2 : 0);
 }
-const factRows = (list, cur) => list.map(f => `<div class="pd-fact"><span>${esc(f.label)}</span><b>${factValue(f.label, f.v, cur)}${f.extra != null ? `<small>${typeof f.extra === 'number' ? cur(f.extra) : esc(String(f.extra))}</small>` : ''}</b></div>`).join('');
+const factRows = (list, cur) => list.map(f => `<div class="pd-fact"><span>${esc(f.label)}</span><b>${factValue(f.label, f.v, cur)}${typeof f.extra === 'number' ? `<small>${cur(f.extra)}</small>` : ''}</b></div>`).join('');
 const factOf = (d, label) => { for (const g of d.facts) for (const f of g) if (f.label.startsWith(label)) return f.v; return null; };
 const kpi = (l, v, n = '') => `<div class="b-kpi"><div class="l">${esc(l)}</div><div class="v">${v}</div>${n ? `<div class="n">${n}</div>` : ''}</div>`;
 const CELL = (head, v, cur) => {
   if (v == null) return '<td></td>';
   if (typeof v === 'boolean') return `<td>${v ? 'Yes' : 'No'}</td>`;
-  if (typeof v !== 'number') return `<td>${esc(String(v))}</td>`;
+  if (typeof v !== 'number') return `<td>${esc(bankName(String(v)))}</td>`;
   if (/date|next payment/i.test(head)) return `<td style="white-space:nowrap">${dayLabel(v)}</td>`;
   if (/^policy no/i.test(head)) return `<td>${v}</td>`;
   if (/%|status|appreciation|yield|rate|drop/i.test(head)) return `<td class="r">${+(v * 100).toFixed(1)}%</td>`;
@@ -2928,14 +2930,14 @@ function propertyHTML(d, title) {
       ${s.length ? kpi('Paid so far', php(done), `${fmtN(paid.length)} of ${fmtN(s.length)} payments`) : ''}
       ${next ? kpi('Next payment', php(next.amount), dayLabel(next.date)) : ''}
     </div>
-    ${s.length ? `<div class="b-card"><h3>Payment progress</h3><div class="pd-progress" role="img" aria-label="${Math.round(done / total * 100)}% of planned payments made"><i style="width:${done / total * 100}%"></i></div><p class="note">${php(done)} of ${php(total)} planned, ${Math.round(done / total * 100)}%. The plan includes loan payments and their interest. ${php(total - done)} to go.</p></div>` : ''}
+    ${s.length ? `<div class="b-card"><h3>Payment progress</h3><div class="pd-progress" role="img" aria-label="${Math.round(done / total * 100)}% of planned payments made"><i style="width:${done / total * 100}%"></i></div><p class="note">${php(done)} of ${php(total)}</p></div>` : ''}
     <div class="pd-facts">${d.facts.map(g => `<div class="b-card">${factRows(g, php)}</div>`).join('')}</div>
     ${d.build ? `<div class="b-card"><h3>Price build-up</h3>${pdTableHTML(d.build, php)}</div>` : ''}
     ${s.length ? `<div class="b-card"><h3>Payment schedule</h3>
       <div class="b-months" style="margin-top:8px">${[['next', 'Next 12'], ['all', `All ${fmtN(s.length)}`], ['paid', `Paid ${fmtN(paid.length)}`]].map(([k, l]) => `<button data-psched="${k}" class="${P.sched === k ? 'on' : ''}">${l}</button>`).join('')}</div>
       <div class="b-scroll"><table class="b-t"><thead><tr><th>Date</th><th class="r">Payment</th>${s.some(y => y.stage) ? '<th>Stage</th>' : ''}<th>Status</th></tr></thead><tbody>${nextRows}</tbody></table></div></div>` : ''}
     ${d.yearly ? `<details class="b-card"><summary>Yearly progress</summary>${pdTableHTML(d.yearly, php)}</details>` : ''}
-    ${d.lots ? `<details class="b-card"><summary>Lot price list</summary><p class="note">Your lot, ${esc(title)} ${esc(d.sub)}, is highlighted.</p>${pdTableHTML(d.lots, php, { mark: r => d.sub === `Block ${r[1]}, Lot ${r[2]}` && String(r[0]).endsWith('1') })}</details>` : ''}`;
+    ${d.lots ? `<details class="b-card"><summary>Lot price list</summary>${pdTableHTML(d.lots, php, { mark: r => d.sub === `Block ${r[1]}, Lot ${r[2]}` && String(r[0]).endsWith('1') })}</details>` : ''}`;
 }
 
 function overviewHTML(d) {
@@ -2949,8 +2951,8 @@ function overviewHTML(d) {
     <div class="b-kpis">
       ${kpi('Total market value', php(tot[c('Total Market Value')]))}
       ${kpi('Total price bought', php(tot[c('Price Bought')]))}
-      ${kpi('Settled market value', php(tot[c('Settled Market Value')]), 'The part already paid for')}
-      ${kpi('Net rental income a month', php(tot[c('Income')]), rented.length ? `About ${php(Math.round(rented.reduce((a, r) => a + r[c('Income')] + (+r[c('Monthly Dues')] || 0), 0) / 100) * 100)} gross, less ${php(rented.reduce((a, r) => a + (+r[c('Monthly Dues')] || 0), 0))} condo dues` : '')}
+      ${kpi('Settled market value', php(tot[c('Settled Market Value')]))}
+      ${kpi('Net rental income a month', php(tot[c('Income')]), rented.length ? `${php(Math.round(rented.reduce((a, r) => a + r[c('Income')] + (+r[c('Monthly Dues')] || 0), 0) / 100) * 100)} gross` : '')}
     </div>
     <div class="pd-cards">
       ${real.props.rows.map(r => `<button class="pd-card" data-pprop="${IDS[r[0]] || ''}"><b>${esc(r[0])}</b><small>${esc(r[c('Location')] || '')} · ${esc(r[c('Type')] || '')}</small><span class="v">${php(r[c('Total Market Value')])}</span><small>Bought for ${php(r[c('Price Bought')])}</small></button>`).join('')}
@@ -2999,10 +3001,8 @@ function renderIns() {
     </div>
     <div class="b-card"><h3>Policies</h3>${pdTableHTML({ head: t.head.map(h => h.replace('Povider', 'Provider')), rows: list, total: q ? null : t.total }, php)}</div>
     <div class="b-card"><h3>Payments made</h3>${pdTableHTML(pays, php)}</div>
-    ${ill ? `<details class="b-card"${P.illOpen ? ' open' : ''}><summary>Policy illustrations</summary>
-      <p class="note">The insurers' projections, not guaranteed values.</p>
-      <div class="b-months">${ills.map((x, i) => `<button data-pill="${i}" class="${x === ill ? 'on' : ''}">${esc(x.title.split('—')[0].trim())}</button>`).join('')}</div>
-      <p class="b-sub" style="margin-bottom:8px">${esc(ill.title)}</p>${pdTableHTML(ill.table, php)}</details>` : ''}`;
+    ${ill ? `<details class="b-card"${P.illOpen ? ' open' : ''}><summary>Policy illustrations (projections)</summary>
+      <div class="b-months">${ills.map((x, i) => `<button data-pill="${i}" class="${x === ill ? 'on' : ''}">${esc(x.title.split('—')[0].trim())}</button>`).join('')}</div>${pdTableHTML(ill.table, php)}</details>` : ''}`;
 }
 
 function renderRwd() {
@@ -3015,15 +3015,15 @@ function renderRwd() {
   const top = [...avail].sort((a, b) => (+b[c('Peso Value')] || 0) - (+a[c('Peso Value')] || 0))[0];
   return `
     <div class="b-kpis">
-      ${kpi('Total value', php(totalAll), 'At the conversion rates in the workbook')}
+      ${kpi('Total value', php(totalAll))}
       ${kpi('Programs with a balance', fmtN(avail.length), `of ${fmtN(t.rows.length)} memberships`)}
-      ${top ? kpi('Largest balance', esc(top[c('Company')]), php(top[c('Peso Value')])) : ''}
+      ${top ? kpi('Largest balance', esc(bankName(top[c('Company')])), php(top[c('Peso Value')])) : ''}
     </div>
     <div class="b-months" role="group" aria-label="Type"><button data-prtype="" class="${P.rtype ? '' : 'on'}">All</button>${types.map(x => `<button data-prtype="${esc(x)}" class="${P.rtype === x ? 'on' : ''}">${esc(x === 'CC' ? 'Credit cards' : x)}</button>`).join('')}</div>
     <div class="b-card">
       <div class="b-filters"><label><input type="checkbox" id="pRall"${P.rall ? ' checked' : ''}> Include zero balances</label><span class="sum">${fmtN(list.length)} shown · ${php(list.reduce((a, r) => a + (+r[c('Peso Value')] || 0), 0))}</span></div>
       <div class="b-scroll"><table class="b-t"><thead><tr><th>Program</th><th class="b-hide-m">Type</th><th class="b-hide-m">Membership ID</th><th class="r">Points / miles</th><th class="r">Peso value</th></tr></thead>
-      <tbody>${list.map(r => `<tr><td>${esc(r[c('Company')] || '')}${r[c('Others')] ? `<small>${esc(String(r[c('Others')]))}</small>` : ''}</td><td class="b-hide-m">${esc(r[c('Type')] === 'CC' ? 'Credit card' : r[c('Type')] || '')}</td><td class="b-hide-m">${esc(String(r[c('Membership ID')] ?? '').trim())}</td><td class="r">${money(r[c('Points/Miles')], Number.isInteger(+r[c('Points/Miles')]) ? 0 : 2)}</td><td class="r">${php(r[c('Peso Value')])}</td></tr>`).join('') || '<tr><td colspan="5">Nothing matches.</td></tr>'}</tbody></table></div>
+      <tbody>${list.map(r => `<tr><td>${esc(bankName(r[c('Company')] || ''))}</td><td class="b-hide-m">${esc(r[c('Type')] === 'CC' ? 'Credit card' : r[c('Type')] || '')}</td><td class="b-hide-m">${esc(String(r[c('Membership ID')] ?? '').trim())}</td><td class="r">${money(r[c('Points/Miles')], Number.isInteger(+r[c('Points/Miles')]) ? 0 : 2)}</td><td class="r">${php(r[c('Peso Value')])}</td></tr>`).join('') || '<tr><td colspan="5">Nothing matches.</td></tr>'}</tbody></table></div>
     </div>`;
 }
 
@@ -3035,7 +3035,7 @@ const pct2 = v => (typeof v === 'number' ? (v * 100).toFixed(2) + '%' : '');
 function invCell(type, v, f) {
   if (v == null || v === '') return '';
   if (typeof v === 'boolean') return v ? 'Yes' : 'No';
-  if (typeof v !== 'number') return esc(String(v).trim());
+  if (typeof v !== 'number') return esc(bankName(String(v).trim()));
   const tiny = Math.abs(v) < 0.005;
   switch (type) {
     case 'money': return f(tiny ? 0 : v);
@@ -3153,7 +3153,7 @@ function invSGD(d) {
 
 // Colour follows the asset class, so filtering or a class going to zero never repaints the others
 const AC_COLOURS = { Equities: 1, 'Real Assets': 2, 'Fixed Income': 3, Cash: 4, 'Digital Assets': 5, Insurance: 6 };
-const shortName = n => String(n || 'Not set').replace(/\s*\(.*\)\s*$/, '');
+const shortName = n => bankName(String(n || 'Not set')).replace(/\s*\(.*\)\s*$/, '');
 function acRanked(title, note, rows, keyOf, assets, top = 6) {
   const m = new Map();
   for (const r of rows) { const k = shortName(keyOf(r)); m.set(k, (m.get(k) || 0) + r['Peso Value']); }
@@ -3195,7 +3195,7 @@ function renderAcct() {
       ${kpi('Held outside pesos', Math.round(pctOf(sum(foreign))) + '%', php(sum(foreign)))}
     </div>
     <div class="b-card"><h3>Assets by class</h3>
-      <p class="note" style="margin:0">Select a class to filter the accounts below. Debts aren't included in these charts.</p>
+      <p class="note" style="margin:0">Excludes debts.</p>
       <div class="ac-stack" role="img" aria-label="${esc(classes.map(([c, v]) => `${c} ${Math.round(pctOf(v))}%`).join(', '))}">${classes.map(([c, v]) => `<button data-acclass="${esc(c)}" class="${P.acClass && P.acClass !== c ? 'dim' : ''}" style="--c:var(--viz${slot(c)});flex:${v} 0 0" data-tip="${esc(c)}: ${php(v)}, ${pctOf(v).toFixed(1)}%" aria-label="${esc(c)}"></button>`).join('')}</div>
       <div class="ac-legend">${classes.map(([c, v]) => `<button data-acclass="${esc(c)}" class="${P.acClass === c ? 'on' : ''}" style="--c:var(--viz${slot(c)})"><i></i>${esc(c)}<span>${php(v)}<small>${pctOf(v).toFixed(1)}%</small></span></button>`).join('')}</div>
     </div>
@@ -3207,22 +3207,21 @@ function renderAcct() {
     <div class="b-card"><h3>Accounts</h3>
       <div class="b-filters">${P.acClass ? `<button class="b-link" data-acclass="${esc(P.acClass)}">${esc(P.acClass)} ✕</button>` : ''}<label><input type="checkbox" id="pAcZero"${P.acZero ? ' checked' : ''}> Include zero balances (${fmtN(all.length - live.length)})</label><span class="sum">${fmtN(list.length)} shown · ${php(sum(list))}</span></div>
       <div class="b-scroll"><table class="b-t"><thead><tr>${cols.map(([h, hide, label]) => `<th class="${[num(h) ? 'r' : '', hide ? 'b-hide-m' : ''].join(' ')}" aria-sort="${k === h ? (d > 0 ? 'ascending' : 'descending') : 'none'}"><button data-acsort="${esc(h)}">${esc(label || h)}${k === h ? (d > 0 ? ' ▲' : ' ▼') : ''}</button></th>`).join('')}</tr></thead>
-      <tbody>${list.map(r => `<tr>${cols.map(([h, hide]) => `<td class="${[num(h) ? 'r' : '', hide ? 'b-hide-m' : ''].join(' ')}">${h === 'Peso Value' ? phpFmt(r[h]) : h === 'Current Amount' ? (r[h] < 0 ? '−' : '') + money(Math.abs(r[h]), 2) : esc(String(r[h] ?? ''))}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${cols.length}">Nothing matches.</td></tr>`}</tbody></table></div>
+      <tbody>${list.map(r => `<tr>${cols.map(([h, hide]) => `<td class="${[num(h) ? 'r' : '', hide ? 'b-hide-m' : ''].join(' ')}">${h === 'Peso Value' ? phpFmt(r[h]) : h === 'Current Amount' ? (r[h] < 0 ? '−' : '') + money(Math.abs(r[h]), 2) : esc(bankName(String(r[h] ?? '')))}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${cols.length}">Nothing matches.</td></tr>`}</tbody></table></div>
     </div>`;
 }
 
 function renderInv() {
   const tabs = [['usd', 'US / Global'], ['php', 'Philippines'], ['sgd', 'Singapore']], d = P.data.inv;
   if (!tabs.some(t => t[0] === P.inv)) P.inv = 'usd';
-  return `<p class="b-sub" style="margin-bottom:10px">Prices are as of the workbook's last save, not live.</p>
-    <div class="b-months" role="group" aria-label="Portfolio">${tabs.map(([k, l]) => `<button data-pinv="${k}" class="${P.inv === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+  return `    <div class="b-months" role="group" aria-label="Portfolio">${tabs.map(([k, l]) => `<button data-pinv="${k}" class="${P.inv === k ? 'on' : ''}">${l}</button>`).join('')}</div>
     ${P.inv === 'usd' ? invUSD(d.usd) : P.inv === 'php' ? invPHP(d.php) : invSGD(d.sgd)}`;
 }
 
 function renderPD() {
   if (!PD_TABS.includes(TAB)) return;
   $('#pdTitle').textContent = { props: 'Properties', ins: 'Insurance', rwd: 'Rewards', inv: 'Investments', acct: 'Accounts' }[TAB];
-  $('#pdSub').textContent = 'From ' + CFG.personalFile.path.split('/').pop() + (P.saved ? ' · Workbook last saved ' + new Date(P.saved).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '');
+  $('#pdSub').textContent = P.saved ? 'Last updated ' + new Date(P.saved).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
   if (!P.data) { $('#pdBody').innerHTML = ''; return; }
   $('#pdBody').innerHTML = TAB === 'props' ? renderProps() : TAB === 'ins' ? renderIns() : TAB === 'inv' ? renderInv() : TAB === 'acct' ? renderAcct() : renderRwd();
   writePDHash();
@@ -3504,7 +3503,7 @@ function renderFiles() {
   const unread = F.folder ? [] : (F.roots || []).filter(r => r.onDemand && !F.demand.has(r.id));
   if (unread.length) $('#fList').insertAdjacentHTML('afterbegin', unread.map(r => `<div class="b-state">${F.demandBusy === r.id
     ? `Reading <b>${esc(r.name)}</b>… <span id="fDemandProgress"></span>`
-    : `<b>${esc(r.name)}</b> isn't loaded, so nothing in it shows or is searched here. It's only read from OneDrive when you ask. <button class="b-link" data-fdemand="${esc(r.id)}">Load it</button>`}</div>`).join(''));
+    : `<b>${esc(r.name)}</b> isn't loaded. <button class="b-link" data-fdemand="${esc(r.id)}">Load it</button>`}</div>`).join(''));
   moreFiles();
 }
 
@@ -3680,7 +3679,7 @@ async function doRefresh(background, manual) {
     const progress = (folders, found) => {
       const t = `${fmtN(found)} photos and videos found in ${fmtN(folders)} folders…`;
       if (background) btn.title = 'Updating: ' + t; else $('#loadText').textContent = t;
-      if (!CATALOG_WHEN) $('#buildNote').textContent = 'Building the photo catalog in the background. You can use the other tabs meanwhile. ' + t;
+      if (!CATALOG_WHEN) $('#buildNote').textContent = 'Building the photo catalog: ' + t;
     };
     const seen = [[0, 0], [0, 0]];                         // shared and private folders count up together
     const part = i => (folders, found) => { seen[i] = [folders, found]; progress(seen[0][0] + seen[1][0], seen[0][1] + seen[1][1]); };
