@@ -3165,7 +3165,7 @@ function invUSD(d) {
   const openOpts = d.options.rows.filter(r => +r.Contracts);
   return `
     <div class="b-kpis">
-      ${kpi('Net liquidity', f(t['Net Liquidity'] || 0), others.length ? `${f((t['Net Liquidity'] || 0) + othersT)} with ${others.map(r => esc(r['Account Owner'])).join(', ')}` : '')}
+      ${kpi('Net liquidity', f((t['Net Liquidity'] || 0) + othersT), others.length ? `Yours ${f(t['Net Liquidity'] || 0)}, ${others.map(r => `${esc(r['Account Owner'])} ${f(r['Current Amount'])}`).join(', ')}` : '')}
       ${kpi('Capital', f(t.Capital || 0))}
       ${kpi('Unrealized', plus(t.Unrealized || 0, f))}
       ${kpi('Realized', plus(t.Realized || 0, f), `Trading ${f(t['Trading Profit'] || 0)}, dividends ${f(t.Dividends || 0)}, interest ${f(t.Interests || 0)}`)}
