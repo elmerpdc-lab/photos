@@ -216,6 +216,16 @@ body.building #photosLayout > aside, body.building #photosLayout > main > :not(#
 #pdLayout[hidden] { display: none; }
 #pdLayout details.b-card > summary { cursor: pointer; font-size: 16px; font-weight: 600; }
 #pdLayout details.b-card[open] > summary { margin-bottom: 10px; }
+.nw-chart { display: block; width: 100%; min-width: 560px; height: auto; margin-top: 8px; font-size: 11px; }
+.nw-chart text { fill: var(--muted); }
+.nw-chart rect[data-tip]:hover, .nw-chart rect[data-tip]:focus-visible { fill: var(--ink); fill-opacity: .06; outline: none; }
+.nw-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 8px; font-size: 13px; color: var(--muted); }
+.nw-legend i { display: inline-block; width: 11px; height: 11px; margin-right: 6px; border-radius: 3px; vertical-align: -1px; }
+.nw-legend i.ln { width: 16px; height: 2px; border-radius: 0; vertical-align: 3px; }
+.b-t.nw-wide td:first-child { position: sticky; left: 0; z-index: 1; min-width: 190px; background: var(--panel); white-space: normal; }
+.nw-n { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; color: var(--muted); }
+.pd-fact b .nw-n { text-align: right; }
+.nw-h { font-size: 12px !important; letter-spacing: .04em; color: var(--muted); }
 .pd-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px; margin-bottom: 14px; }
 .pd-facts .b-card { margin: 0; }
 .pd-fact { display: flex; justify-content: space-between; gap: 14px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
@@ -472,6 +482,8 @@ body.building #photosLayout > aside, body.building #photosLayout > main > :not(#
     <button data-tab="rwd" role="tab" hidden><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.8-4.5 4.2 1.2 6.1L12 16.8l-5.5 2.9 1.2-6.1-4.5-4.2 6.1-.8z"/></svg>Rewards</button>
     <button data-tab="inv" role="tab" hidden><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19h16"/><path d="m5 15 5-5 4 3 5-7"/></svg>Investments</button>
     <button data-tab="acct" role="tab" hidden><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2-2h12v4"/><rect x="4" y="9" width="17" height="11" rx="2"/><path d="M16 14.5h2"/></svg>Accounts</button>
+    <button data-tab="sndk" role="tab" hidden><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>Sandisk</button>
+    <button data-tab="nwp" role="tab" hidden><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V6M16 20v-8M22 20H2"/><path d="m4 6 6-3 6 5 5-4"/></svg>Net Worth</button>
   </nav>
   </div>
 
@@ -2475,7 +2487,7 @@ function setTab(tab) {
   $('#filesLayout').hidden = tab !== 'files';
   $('#budgetLayout').hidden = tab !== 'budget';
   $('#pdLayout').hidden = !PD_TABS.includes(tab);
-  document.querySelector('label.search').style.visibility = tab === 'props' ? 'hidden' : '';   // Properties has nothing to search
+  document.querySelector('label.search').style.visibility = ['props', 'sndk', 'nwp'].includes(tab) ? 'hidden' : '';   // these tabs have nothing to search
   $('#fPanel').hidden = true;
   toggleDrawer(false);
   if (tab !== 'photos') {
@@ -2711,9 +2723,12 @@ function bindBudgetUI() {
    in this page or on GitHub). Read-only: it shows the values Excel last saved. Sections are found by their
    labels, so added rows don't break anything. Downloaded only when the file has changed.
    ===================================================================== */
-const PD_TABS = ['props', 'ins', 'rwd', 'inv', 'acct'], PD_V = 7;   // bump PD_V when parsePD changes, so saved copies are re-read
+const PD_TABS = ['props', 'ins', 'rwd', 'inv', 'acct', 'sndk', 'nwp'], PD_V = 8;   // bump PD_V when parsePD changes, so saved copies are re-read
 const P = { data: null, eTag: '', saved: '', checked: 0, root: null, busy: false, prop: 'overview', sched: 'next', q: '', rtype: '', rall: false, ill: 0, inv: 'usd', hold: '', pstk: '', pfnd: '', acOwner: '', acClass: '', acZero: false, acSort: { k: 'Peso Value', d: -1 }, open: {} };
-const pdAllowed = tab => { const c = CFG.personalFile; return !!c && (OWNER || !(c.ownerOnly || (c.ownerOnlyTabs || []).includes(tab))) && filesAllowed(); };
+// Always owner only, whatever config.js says; family members never receive these sheets
+const OWNER_TABS = ['sndk', 'nwp'];
+const pdAllowed = tab => { const c = CFG.personalFile; return !!c && (OWNER || !(c.ownerOnly || OWNER_TABS.includes(tab) || (c.ownerOnlyTabs || []).includes(tab))) && filesAllowed(); };
+const pdSheets = () => ['real', 'shr', 'upt', 'ser', 'car', 'ins', 'rwd', 'usd', 'php', 'sgd', 'accounts', ...(OWNER ? OWNER_TABS : [])];
 const dayLabel = n => (typeof n === 'number' ? serialDate(n).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '');
 const php = (n, dp = 0) => '₱' + money(n, dp);
 const rm = (n, dp = 0) => 'RM ' + money(n, dp);
@@ -2825,6 +2840,61 @@ function parseAccounts(wb) {
     return o;
   });
 }
+const pdTry = (f, wb) => { try { return f(wb); } catch (e) { console.warn(e); return null; } };
+// A table that may have blank rows waiting to be filled in: rows run to "Total" or an empty row; only filled rows are kept
+function pdLoose(g, title, header) {
+  const i = title ? rowOf(g, 0, title) : 0;
+  const h = i < 0 ? -1 : g.findIndex((r, n) => n >= i && r && clean(r[0]) === header);
+  if (h < 0) return { rows: [], total: null };
+  const head = g[h].map(x => (x == null ? '' : String(x).trim())), rows = [];
+  let total = null;
+  for (let k = h + 1; k < g.length; k++) {
+    const r = g[k] || [];
+    if (!r.some(v => v != null && v !== '')) break;
+    if (clean(r[0]) === 'Total') { total = r; break; }
+    if (r[0] != null && r[0] !== '') rows.push(r);
+  }
+  return pdObjs({ head, rows, total });
+}
+const pdPairs = (g, from, to, col) => {
+  const out = [];
+  for (let i = from; i < to; i++) { const r = g[i] || [], l = clean(r[col]); if (typeof l === 'string' && r[col + 1] != null) out.push({ label: l, v: r[col + 1] }); }
+  return out;
+};
+function parseSndk(wb) {
+  const g = pdGrid(wb, 'sndk'), iM = rowOf(g, 0, 'Return Metrics'), iE = rowOf(g, 0, 'Equity Awards');
+  const end = iE >= 0 ? iE : iM + 8;
+  return { accounts: pdLoose(g, '', 'Account Alias'), returns: pdPairs(g, iM + 1, end, 0), market: pdPairs(g, iM + 1, end, 3), cash: pdPairs(g, iM + 1, end, 6),
+    grants: pdLoose(g, 'Equity Awards', 'Grant ID'), lots: pdLoose(g, 'Lots Acquired', 'Lot ID'), trades: pdLoose(g, 'Transactions', 'Date'),
+    perf: pdLoose(g, 'Monthly Performance', 'Date'), espp: pdLoose(g, 'ESPP Contributions', 'Date') };
+}
+// Net worth projection: one value per year (columns D onwards), by row label, plus the assumptions above it
+function parseNwp(wb) {
+  const g = pdGrid(wb, 'nwp'), iY = rowOf(g, 0, 'Year'), C = 3;
+  if (iY < 0) return null;
+  const years = (g[iY] || []).slice(C).filter(v => typeof v === 'number'), n = years.length;
+  const iPh = rowOf(g, 0, 'Phase', iY), iChart = rowOf(g, 0, 'CHART DATA', iY);
+  const heading = (l, r) => /^[A-Z0-9 &\/—-]+(\(|$)/.test(l) && typeof r[1] !== 'number';
+  const series = {}, groups = [];
+  for (let i = iY + 1; i < g.length; i++) {
+    const r = g[i] || [], label = clean(r[0]);
+    if (typeof label !== 'string' || !label) continue;
+    const v = r.slice(C, C + n).map(x => (typeof x === 'number' ? x : null));
+    if (v.every(x => x == null) && heading(label, r)) { if (iChart < 0 || i < iChart) groups.push({ title: label, rows: [] }); continue; }
+    series[label] = v;
+    if (groups.length && (iChart < 0 || i < iChart)) groups[groups.length - 1].rows.push(label);
+  }
+  const iA = rowOf(g, 0, 'ASSUMPTIONS'), iP = rowOf(g, 0, 'PROJECTION'), assumptions = [];
+  let memo = 'Memo';
+  for (let i = iA + 1; iA >= 0 && i < (iP >= 0 ? iP : iY); i++) {
+    const r = g[i] || [], label = clean(r[0]);
+    if (typeof label !== 'string' || !label) continue;
+    if (heading(label, r)) { assumptions.push({ title: label, memo: typeof r[2] === 'string' ? r[2].trim() : '', items: [] }); continue; }
+    if (!assumptions.length) assumptions.push({ title: '', memo: '', items: [] });
+    assumptions[assumptions.length - 1].items.push({ label, v: clean(r[1]), memo: clean(r[2]), note: clean(r[3]) });
+  }
+  return { years, phases: iPh >= 0 ? (g[iPh] || []).slice(C, C + n).map(x => (x == null ? '' : String(x))) : [], series, groups, assumptions };
+}
 function parsePD(wb) {
   const real = pdGrid(wb, 'real');
   const iP = rowOf(real, 0, 'Name'), iT = rowOf(real, 0, 'Name', iP + 1), iR = rowOf(real, 0, 'Pacific Residences Returns');
@@ -2845,7 +2915,8 @@ function parsePD(wb) {
     shr: pdProperty(wb, 'shr'), upt: pdProperty(wb, 'upt'), ser: pdProperty(wb, 'ser'),
     car: { vehicles: pdTable(car, iV, 0, 13), loan, schedule: iNo >= 0 ? pdTable(car, iL, iNo, 7) : null },
     ins: { policies: pdTable(ins, iPol, 0, 11), payments: pdTable(ins, iPay, 0, 4), ills },
-    rwd: pdTable(rw, iW, 0, 12), inv: parseInv(wb), acct: parseAccounts(wb) };
+    rwd: pdTable(rw, iW, 0, 12), inv: parseInv(wb), acct: parseAccounts(wb),
+    ...(OWNER ? { sndk: pdTry(parseSndk, wb), nwp: pdTry(parseNwp, wb) } : {}) };
 }
 
 async function loadPD(force = false) {
@@ -2861,7 +2932,7 @@ async function loadPD(force = false) {
         if (!window.XLSX) await loadJs(CDNJS + 'xlsx/0.18.5/xlsx.full.min.js');
         const r = await fetch('demo-pd.xlsx');
         if (!r.ok) throw new Error('No demo-pd.xlsx');
-        P.data = parsePD(XLSX.read(await r.arrayBuffer(), { type: 'array', sheets: ['real', 'shr', 'upt', 'ser', 'car', 'ins', 'rwd', 'usd', 'php', 'sgd', 'accounts'] }));
+        P.data = parsePD(XLSX.read(await r.arrayBuffer(), { type: 'array', sheets: pdSheets() }));
       }
       say(''); renderPD(); return;
     }
@@ -2879,7 +2950,7 @@ async function loadPD(force = false) {
       if (!window.XLSX) await loadJs(CDNJS + 'xlsx/0.18.5/xlsx.full.min.js');
       const r = await fetch(meta['@microsoft.graph.downloadUrl']);
       if (!r.ok) throw new Error('Could not download the workbook (' + r.status + ').');
-      P.data = parsePD(XLSX.read(await r.arrayBuffer(), { type: 'array', sheets: ['real', 'shr', 'upt', 'ser', 'car', 'ins', 'rwd', 'usd', 'php', 'sgd', 'accounts'] }));
+      P.data = parsePD(XLSX.read(await r.arrayBuffer(), { type: 'array', sheets: pdSheets() }));
       P.eTag = meta.eTag; P.saved = meta.lastModifiedDateTime;
       if (PD_TABS.includes(TAB)) renderPD();
     }
@@ -3240,12 +3311,127 @@ function renderInv() {
     ${P.inv === 'usd' ? invUSD(d.usd) : P.inv === 'php' ? invPHP(d.php) : invSGD(d.sgd)}`;
 }
 
+const pdEmpty = t => `<div class="b-card"><p class="b-sub" style="margin:0">${esc(t)}</p></div>`;
+function renderSndk() {
+  const d = P.data.sndk;
+  if (!d) return pdEmpty("Couldn't read the sndk sheet.");
+  const f = usdFmt, t = d.accounts.total || d.accounts.rows[0] || {}, val = (list, l) => (list.find(x => x.label.startsWith(l)) || {}).v;
+  const price = val(d.market, 'SNDK Price'), asOf = val(d.market, 'Price As Of'), comp = val(d.returns, 'Total Comp Income');
+  const pairs = (list, fmt) => list.map(x => `<div class="pd-fact"><span>${esc(x.label)}</span><b>${typeof x.v === 'number' ? fmt(x.v, x.label) : esc(String(x.v))}</b></div>`).join('');
+  const espp = val(d.market, 'ESPP Contrib');
+  const any = d.grants.rows.length || d.lots.rows.length || d.trades.rows.length || d.espp.rows.length;
+  return `
+    <div class="b-kpis">
+      ${kpi('Net liquidity', f(t['Net Liquidity'] || 0), t['Peso Value'] ? phpFmt(t['Peso Value']) : '')}
+      ${kpi('Unvested value', f(t['Unvested Value'] || 0))}
+      ${kpi('Unrealized', plus(t.Unrealized || 0, f))}
+      ${comp != null ? kpi('Total comp income', f(comp)) : ''}
+      ${price != null ? kpi('SNDK price', f(price, 2), typeof asOf === 'number' ? 'As of ' + dayLabel(asOf) : '') : ''}
+    </div>
+    <div class="pd-facts">
+      <div class="b-card"><h3>Returns</h3>${pairs(d.returns.filter(x => !/comp income/i.test(x.label)), v => pct2(v))}</div>
+      <div class="b-card"><h3>Cash</h3>${pairs(d.cash, v => f(v, 2))}${typeof espp === 'number' ? `<div class="pd-fact"><span>ESPP contribution</span><b>${+(espp * 100).toFixed(2)}%</b></div>` : ''}</div>
+    </div>
+    ${any ? '' : pdEmpty('No grants, purchases or sales entered yet. They show here once they are in the sndk sheet.')}
+    ${d.grants.rows.length ? `<div class="b-card"><h3>Grants and ESPP offerings</h3>${invTable(d.grants, [['Grant ID', 'text'], ['Plan', 'text'], ['Grant Date', 'date'], ['Shares Granted', 'qty', { label: 'Granted' }], ['Grant FMV', 'money2', { hide: 1 }], ['Vesting Schedule', 'text', { label: 'Vesting', hide: 1 }], ['Next Vest Date', 'date', { label: 'Next vest' }], ['Final Vest Date', 'date', { label: 'Final vest', hide: 1 }], ['Shares Vested', 'qty', { label: 'Vested', hide: 1 }], ['Unvested', 'qty', { hide: 1 }], ['Unvested Value', 'money'], ['% Vested', 'pct', { hide: 1 }], ['Status', 'text', { hide: 1 }]], f)}</div>` : ''}
+    ${d.lots.rows.length ? `<div class="b-card"><h3>Shares acquired</h3>${invTable(d.lots, [['Lot ID', 'text', { label: 'Lot' }], ['Plan', 'text'], ['Acquired Date', 'date', { label: 'Acquired' }], ['Shares Acquired', 'qty', { label: 'Acquired', hide: 1 }], ['FMV at Acquisition', 'money2', { label: 'FMV', hide: 1 }], ['Purchase Price', 'money2', { hide: 1 }], ['Shares Held', 'qty', { label: 'Held' }], ['Cost Basis', 'money', { hide: 1 }], ['Market Value', 'money', { label: 'Value' }], ['Unrealized', 'signed'], ['Unrealized %', 'pct', { hide: 1 }], ['LT/Qualifying Date', 'date', { label: 'Qualifying', hide: 1 }], ['Status', 'text', { hide: 1 }]], f)}</div>` : ''}
+    ${d.trades.rows.length ? invMore('k-tr', 'Sales, dividends and cash', invTable({ rows: newestFirst(d.trades.rows, 'Date'), total: d.trades.total }, [['Date', 'date'], ['Type', 'text'], ['Lot ID', 'text', { label: 'Lot', hide: 1 }], ['Shares', 'qty', { hide: 1 }], ['Price', 'money2', { hide: 1 }], ['Fees', 'money2', { hide: 1 }], ['Tax Withheld', 'money2', { label: 'Tax', hide: 1 }], ['Net Amount', 'signed', { label: 'Net' }], ['Realized', 'signed'], ['Notes', 'text', { hide: 1 }]], f)) : ''}
+    ${d.espp.rows.length ? invMore('k-espp', 'ESPP contributions', invTable({ rows: newestFirst(d.espp.rows, 'Date'), total: d.espp.total }, [['Date', 'date'], ['Offering ID', 'text', { label: 'Offering', hide: 1 }], ['Gross Salary', 'qty', { hide: 1 }], ['Contribution', 'qty'], ['Amount (USD)', 'money2', { label: 'USD' }]], f)) : ''}
+    ${d.perf.rows.some(r => r['End Value'] != null) ? invMore('k-perf', 'Monthly performance', invTable({ rows: perfRows(d.perf) }, [['Date', 'month', { label: 'Month' }], ['Cash In', 'signed', { hide: 1 }], ['End Value', 'money'], ['Return', 'signed'], ['Return %', 'pct']], f)) : ''}`;
+}
+
+// ₱ in millions for the projection, where whole pesos would suggest more precision than a plan has
+const phpM = v => (v == null ? '' : Math.abs(v) < 500 ? '–' : (v < 0 ? '−' : '') + '₱' + (Math.abs(v) >= 1e6 ? (Math.abs(v) / 1e6).toFixed(1) + 'M' : Math.round(Math.abs(v) / 1e3) + 'K'));
+function nwChart(d, S) {
+  const Y = d.years, n = Y.length, W = 760, H = 300, L = 52, R = 8, T = 26, B = 26;
+  const parts = [['Financial assets', 1], ['Real estate', 2], ['Vehicles & other', 3]].map(([k, c]) => ({ k, c, v: d.series[k] || [] }));
+  const nw = S('NET WORTH') || d.series['Net worth'] || [], plan = S('Plan baseline') || [], actual = S('Actual year-end') || [];
+  const top = Math.max(...Y.map((_, i) => parts.reduce((x, p) => x + Math.max(0, p.v[i] || 0), 0)), ...nw.map(v => v || 0), ...plan.map(v => v || 0)) || 1;
+  const step = [1, 2, 2.5, 5, 10].map(m => m * 10 ** Math.floor(Math.log10(top / 4))).find(s => top / s <= 5);
+  const max = Math.ceil(top / step) * step, y = v => T + (H - T - B) * (1 - v / max), cw = (W - L - R) / n, x = i => L + cw * (i + 0.5);
+  let svg = '';
+  for (let v = 0; v <= max + 1; v += step) svg += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v ? phpM(v) : '0'}</text>`;
+  // Phases (Sandisk / PH work / Retired) across the top, with a divider where one ends
+  for (let i = 0, j; i < n; i = j) {
+    for (j = i + 1; j < n && d.phases[j] === d.phases[i]; j++);
+    if (i) svg += `<line x1="${L + cw * i}" x2="${L + cw * i}" y1="${T - 14}" y2="${H - B}" stroke="var(--muted)" stroke-dasharray="3 3" opacity=".6"/>`;
+    svg += `<text x="${L + cw * (i + j) / 2}" y="${T - 12}" text-anchor="middle">${esc(d.phases[i] || '')}</text>`;
+  }
+  Y.forEach((yr, i) => {
+    let base = 0;
+    for (const p of parts) { const v = Math.max(0, p.v[i] || 0); if (v) svg += `<rect x="${x(i) - cw * .32}" width="${cw * .64}" y="${y(base + v)}" height="${y(base) - y(base + v)}" fill="var(--viz${p.c})"/>`; base += v; }
+    if (n <= 12 || i % 2 === 0 || i === n - 1) svg += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${yr}</text>`;
+  });
+  const pts = nw.map((v, i) => (v == null ? null : `${x(i)},${y(v)}`)).filter(Boolean).join(' ');
+  svg += `<polyline points="${pts}" fill="none" stroke="var(--ink)" stroke-width="2"/>`;
+  nw.forEach((v, i) => { if (v != null) svg += `<circle cx="${x(i)}" cy="${y(v)}" r="2.5" fill="var(--ink)"/>`; });
+  actual.forEach((v, i) => { if (v != null) svg += `<circle cx="${x(i)}" cy="${y(v)}" r="4.5" fill="var(--accent)" stroke="var(--panel)" stroke-width="1.5"/>`; });
+  // One hover target per year
+  Y.forEach((yr, i) => {
+    const tip = `${yr}${d.phases[i] ? ' (' + d.phases[i] + ')' : ''}: net worth ${phpM(nw[i])}${actual[i] != null ? ', actual ' + phpM(actual[i]) : ''}. ` + parts.map(p => `${p.k} ${phpM(p.v[i])}`).join(', ');
+    svg += `<rect x="${L + cw * i}" y="${T}" width="${cw}" height="${H - T - B}" fill="transparent" data-tip="${esc(tip)}" tabindex="0" aria-label="${esc(tip)}"/>`;
+  });
+  const legend = parts.map(p => `<span><i style="background:var(--viz${p.c})"></i>${esc(p.k)}</span>`).join('') + '<span><i class="ln" style="background:var(--ink)"></i>Net worth</span>'
+    + (actual.some(v => v != null) ? '<span><i style="background:var(--accent);border-radius:50%"></i>Actual</span>' : '');
+  return `<div class="b-scroll"><svg class="nw-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Projected net worth by year, ${Y[0]} to ${Y[n - 1]}">${svg}</svg></div><div class="nw-legend">${legend}</div>`;
+}
+function nwVal(label, v) {
+  if (v == null || v === '') return '';
+  if (typeof v !== 'number') return esc(String(v));
+  if (/\/ PHP$/.test(label)) return (+v).toLocaleString('en-US', { maximumFractionDigits: 4 });
+  if (Number.isInteger(v) && v >= 1900 && v <= 2100) return String(v);
+  if (v !== 0 && Math.abs(v) < 1) return +(v * 100).toFixed(2) + '%';
+  if (/\(years/i.test(label)) return String(v);
+  if (/\(RM\)/.test(label)) return rm(v);
+  return php(v);
+}
+function nwWide(d, labels) {
+  const rows = labels.filter(l => d.series[l] && d.series[l].some(v => v != null));
+  const tot = l => /^(Total|NET WORTH|Net cash)/.test(l);
+  return `<div class="b-scroll"><table class="b-t nw-wide"><thead><tr><th></th>${d.years.map(y => `<th class="r">${y}</th>`).join('')}</tr></thead><tbody>${rows.map(l => `<tr class="${tot(l) ? 'tot' : ''}"><td>${esc(l)}</td>${d.series[l].map(v => `<td class="r">${phpM(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+// One assumption. A note starting "C = …" names the memo column (the sheet's column C) for that row
+const nwFact = a => x => {
+  let note = x.note == null ? '' : x.note, label = a.memo && !/^historical \/ memo$/i.test(a.memo) ? a.memo.replace(/\s*\(.*\)$/, '') : '';
+  if (typeof note === 'string' && /^C = /.test(note)) { const [c, ...rest] = note.slice(4).split(';'); if (!label) label = c.trim(); note = rest.join(';').trim(); if (note) note = note[0].toUpperCase() + note.slice(1); }
+  if (typeof note === 'number') note = note === x.v ? '' : 'Override ' + nwVal(x.label, note);
+  label = label ? label[0].toUpperCase() + label.slice(1) : 'Memo';
+  const memo = x.memo == null || x.memo === '' ? '' : `<small class="nw-n">${esc(label)} ${nwVal(x.label.replace(/\/ PHP$/, ''), x.memo)}</small>`;
+  return `<div class="pd-fact"><span>${esc(x.label)}${note ? `<small class="nw-n">${esc(String(note))}</small>` : ''}</span><b>${nwVal(x.label, x.v)}${memo}</b></div>`;
+};
+function renderNwp() {
+  const d = P.data.nwp;
+  if (!d || !d.years.length) return pdEmpty("Couldn't read the nwp sheet.");
+  const S = p => { const k = Object.keys(d.series).find(k => k.startsWith(p)); return k ? d.series[k] : null; };
+  const one = p => (S(p) || [])[0], n = d.years.length;
+  const nw = S('NET WORTH') || [], real = S("Net worth in today's") || [], usd = S('Net worth (USD)') || [], chg = S('Year-on-year') || [], gr = S('Growth %') || [];
+  const lastWork = (d.assumptions.flatMap(a => a.items).find(x => x.label.startsWith('Last working year')) || {}).v;
+  const iW = d.years.indexOf(lastWork), cagr = one('Net worth CAGR'), target = one('Target CAGR'), gap = one('Gap vs target');
+  const pc = v => +(v * 100).toFixed(1) + '%';
+  const group = t => (d.groups.find(x => x.title.startsWith(t)) || { rows: [] }).rows;
+  const liab = group('LIABILITIES'), cut = liab.indexOf('NET WORTH');
+  return `
+    <div class="b-kpis">
+      ${kpi('Net worth now', phpM(nw[0]), usd[0] != null ? usdFmt(usd[0]) : '')}
+      ${iW >= 0 ? kpi(`At retirement (${lastWork})`, phpM(nw[iW]), real[iW] != null ? `${phpM(real[iW])} in today's pesos` : '') : ''}
+      ${kpi(`In ${d.years[n - 1]}`, phpM(nw[n - 1]), real[n - 1] != null ? `${phpM(real[n - 1])} in today's pesos` : '')}
+      ${cagr != null ? kpi('Yearly growth', pc(cagr), target != null ? `Target ${pc(target)}${Math.abs(gap) >= 0.0005 ? `, ${gap > 0 ? 'above' : 'below'} by ${pc(Math.abs(gap))}` : ', on target'}` : '') : ''}
+    </div>
+    <div class="b-card"><h3>Projected net worth</h3>${nwChart(d, S)}</div>
+    <div class="b-card"><h3>Year by year</h3><div class="b-scroll"><table class="b-t"><thead><tr><th>Year</th><th class="b-hide-m">Phase</th><th class="r">Net worth</th><th class="r">Change</th><th class="r b-hide-m">Growth</th><th class="r">Today's pesos</th><th class="r b-hide-m">USD</th></tr></thead><tbody>
+      ${d.years.map((y, i) => `<tr class="${i === iW ? 'pd-next' : ''}"><td>${y}</td><td class="b-hide-m">${esc(d.phases[i] || '')}</td><td class="r">${phpM(nw[i])}</td><td class="r">${chg[i] == null ? '' : (chg[i] > 0 ? '+' : '') + phpM(chg[i])}</td><td class="r b-hide-m">${gr[i] == null ? '' : pc(gr[i])}</td><td class="r">${phpM(real[i])}</td><td class="r b-hide-m">${usd[i] == null ? '' : '$' + (usd[i] / 1e6).toFixed(2) + 'M'}</td></tr>`).join('')}
+    </tbody></table></div></div>
+    ${invMore('n-assets', 'Assets and liabilities by year', nwWide(d, [...group('ASSETS'), ...(cut >= 0 ? liab.slice(0, cut + 1) : liab)]))}
+    ${invMore('n-cash', 'Cash flows by year', nwWide(d, group('CASH FLOWS')))}
+    ${invMore('n-asm', 'Assumptions', `<div class="pd-facts" style="margin:10px 0 0">${d.assumptions.filter(a => a.items.length).map(a => `<div class="b-card">${a.title ? `<h3 class="nw-h">${esc(a.title)}</h3>` : ''}${a.items.map(nwFact(a)).join('')}</div>`).join('')}</div>`)}`;
+}
+
 function renderPD() {
   if (!PD_TABS.includes(TAB)) return;
-  $('#pdTitle').textContent = { props: 'Properties', ins: 'Insurance', rwd: 'Rewards', inv: 'Investments', acct: 'Accounts' }[TAB];
+  $('#pdTitle').textContent = { props: 'Properties', ins: 'Insurance', rwd: 'Rewards', inv: 'Investments', acct: 'Accounts', sndk: 'Sandisk', nwp: 'Net Worth' }[TAB];
   $('#pdSub').textContent = P.saved ? 'Last updated ' + new Date(P.saved).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
   if (!P.data) { $('#pdBody').innerHTML = ''; return; }
-  $('#pdBody').innerHTML = TAB === 'props' ? renderProps() : TAB === 'ins' ? renderIns() : TAB === 'inv' ? renderInv() : TAB === 'acct' ? renderAcct() : renderRwd();
+  $('#pdBody').innerHTML = TAB === 'props' ? renderProps() : TAB === 'ins' ? renderIns() : TAB === 'inv' ? renderInv() : TAB === 'acct' ? renderAcct() : TAB === 'sndk' ? renderSndk() : TAB === 'nwp' ? renderNwp() : renderRwd();
   writePDHash();
 }
 
