@@ -250,6 +250,29 @@ body.building #photosLayout > aside, body.building #photosLayout > main > :not(#
 .b-months button { padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
 .b-months button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .b-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.nw-ytd .b-kpis { margin: 10px 0 12px; }
+.nw-ytd h3 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.nw-st { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+.nw-st.up { color: var(--viz3); background: color-mix(in srgb, var(--viz3) 14%, transparent); }
+.nw-st.dn { color: var(--accent); background: var(--accent-soft); }
+.nw-yb { display: grid; grid-template-columns: 56px 1fr 64px; align-items: center; gap: 10px; margin: 6px 0; font-size: 13px; }
+.nw-yb .r { text-align: right; font-variant-numeric: tabular-nums; }
+.nw-yt { position: relative; height: 14px; border-radius: 4px; background: var(--chip); }
+.nw-yt i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
+.nw-yt i.tg { background: var(--muted); opacity: .55; }
+.nw-yt i.up { background: var(--viz3); }
+.nw-yt i.dn { background: var(--accent); }
+.nw-yt b { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--ink); }
+.nw-yn { margin-top: 6px; font-size: 12px; color: var(--muted); }
+.b-t td.nw-up { color: var(--viz3); }
+.b-t td.nw-dn { color: var(--accent); }
+.nw-wait { color: var(--muted); font-size: 12px; }
+.b-t tr.nw-act td { color: var(--muted); }
+@media (max-width: 600px) {
+  .nw-ytd .b-kpis { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .nw-ytd .b-kpi { padding: 10px 12px; }
+  .nw-ytd .b-kpi .v { font-size: 20px; }
+}
 .b-kpi, .b-card { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
 .b-kpi { padding: 14px 16px; }
 .b-kpi .l { font-size: 13px; color: var(--muted); }
@@ -2750,7 +2773,7 @@ function bindBudgetUI() {
    in this page or on GitHub). Read-only: it shows the values Excel last saved. Sections are found by their
    labels, so added rows don't break anything. Downloaded only when the file has changed.
    ===================================================================== */
-const PD_TABS = ['props', 'ins', 'rwd', 'inv', 'acct', 'sndk', 'nwp'], PD_V = 8;   // bump PD_V when parsePD changes, so saved copies are re-read
+const PD_TABS = ['props', 'ins', 'rwd', 'inv', 'acct', 'sndk', 'nwp'], PD_V = 11;   // bump PD_V when parsePD changes, so saved copies are re-read
 const P = { data: null, eTag: '', saved: '', checked: 0, root: null, busy: false, prop: 'overview', sched: 'next', q: '', rtype: '', rall: false, ill: 0, inv: 'usd', hold: '', pstk: '', pfnd: '', acOwner: '', acClass: '', acZero: false, acSort: { k: 'Peso Value', d: -1 }, open: {} };
 // Always owner only, whatever config.js says; family members never receive these sheets
 const OWNER_TABS = ['sndk', 'nwp'];
@@ -2920,7 +2943,48 @@ function parseNwp(wb) {
     if (!assumptions.length) assumptions.push({ title: '', memo: '', items: [] });
     assumptions[assumptions.length - 1].items.push({ label, v: clean(r[1]), memo: clean(r[2]), note: clean(r[3]) });
   }
-  return { years, phases: iPh >= 0 ? (g[iPh] || []).slice(C, C + n).map(x => (x == null ? '' : String(x))) : [], series, groups, assumptions };
+  // The "YEAR-TO-DATE VS TARGET" block (label in one column, value a few columns to its right), wherever it sits
+  let ytd = null;
+  for (let i = 0; i < g.length && !ytd; i++) {
+    const r = g[i] || [], c = r.findIndex(v => typeof v === 'string' && /YEAR-TO-DATE/i.test(v));
+    if (c < 0) continue;
+    ytd = { title: r[c].trim(), items: [] };
+    for (let j = i + 1; j < g.length; j++) {
+      const rr = g[j] || [], l = clean(rr[c]);
+      if (typeof l !== 'string' || !l) break;
+      ytd.items.push({ label: l, v: clean(rr.slice(c + 1).find(x => x != null && x !== '')) });
+    }
+  }
+  // ACTUAL VS PLAN TRACKER: its own Year row, which starts before the projection (past years' actuals)
+  let tracker = null;
+  const iTr = rowOf(g, 0, 'ACTUAL VS PLAN'), iTy = iTr >= 0 ? rowOf(g, 0, 'Year', iTr) : -1;
+  if (iTy >= 0 && iTy - iTr < 4) {
+    const yr = g[iTy] || [], c0 = yr.findIndex((v, j) => j > 0 && typeof v === 'number');
+    let c1 = c0;
+    while (c0 > 0 && typeof yr[c1] === 'number') c1++;
+    const row = pre => {
+      for (let i = iTy + 1; i < Math.min(g.length, iTy + 8); i++) {
+        const l = clean((g[i] || [])[0]);
+        if (typeof l === 'string' && l.startsWith(pre)) return { label: l, v: g[i].slice(c0, c1).map(x => (typeof x === 'number' ? x : null)) };
+      }
+      return null;
+    };
+    const plan = row('Plan'), act = row('Actual');
+    if (c0 > 0 && (plan || act)) tracker = { years: yr.slice(c0, c1), plan: plan ? plan.v : [], actual: act ? act.v : [],
+      planNote: plan ? (plan.label.match(/\(([^)]*\d{4}[^)]*)\)/) || [])[1] || '' : '' };
+  }
+  // CHART DATA's column C: a past actual year (e.g. 2025) split into the same parts, with a note on how
+  let chartPre = null;
+  if (iChart >= 0) {
+    const iCy = rowOf(g, 0, 'Year', iChart), yv = iCy >= 0 ? Number((g[iCy] || [])[C - 1]) : NaN;
+    if (yv) {
+      const parts = {};
+      for (let i = iCy + 1; i < g.length; i++) { const r = g[i] || [], l = clean(r[0]); if (typeof l !== 'string' || !l) break; if (typeof r[C - 1] === 'number') parts[l] = r[C - 1]; }
+      const note = clean((g[iChart] || [])[C - 1]);
+      chartPre = { year: yv, parts, note: typeof note === 'string' ? note : '' };
+    }
+  }
+  return { ytd, tracker, chartPre, years, phases: iPh >= 0 ? (g[iPh] || []).slice(C, C + n).map(x => (x == null ? '' : String(x))) : [], series, groups, assumptions };
 }
 function parsePD(wb) {
   const real = pdGrid(wb, 'real');
@@ -3370,32 +3434,42 @@ function renderSndk() {
 // ₱ in millions for the projection, where whole pesos would suggest more precision than a plan has
 const phpM = v => (v == null ? '' : Math.abs(v) < 500 ? '–' : (v < 0 ? '−' : '') + '₱' + (Math.abs(v) >= 1e6 ? (Math.abs(v) / 1e6).toFixed(1) + 'M' : Math.round(Math.abs(v) / 1e3) + 'K'));
 function nwChart(d, S) {
-  const Y = d.years, n = Y.length, W = 760, H = 300, L = 52, R = 8, T = 26, B = 26;
-  const parts = [['Financial assets', 1], ['Real estate', 2], ['Vehicles & other', 3]].map(([k, c]) => ({ k, c, v: d.series[k] || [] }));
-  const nw = S('NET WORTH') || d.series['Net worth'] || [], plan = S('Plan baseline') || [], actual = S('Actual year-end') || [];
-  const top = Math.max(...Y.map((_, i) => parts.reduce((x, p) => x + Math.max(0, p.v[i] || 0), 0)), ...nw.map(v => v || 0), ...plan.map(v => v || 0)) || 1;
+  const tr = d.tracker, pre = tr ? tr.years.filter(y => y < d.years[0]) : [], k = pre.length, pad = a => [...pre.map(() => null), ...a];
+  const Y = [...pre, ...d.years], n = Y.length, W = 760, H = 300, L = 52, R = 8, T = 26, B = 26;
+  const phases = [...pre.map(() => 'Actual'), ...d.phases];
+  const parts = [['Financial assets', 1], ['Real estate', 2], ['Vehicles & other', 3]].map(([k, c]) => ({ k, c, v: pad(d.series[k] || []) }));
+  const nw = pad(S('NET WORTH') || d.series['Net worth'] || []), plan = [];
+  const actual = tr ? Y.map(y => { const j = tr.years.indexOf(y); return j >= 0 ? tr.actual[j] : null; }) : pad(S('Actual year-end') || []);
+  const top = Math.max(...Y.map((_, i) => parts.reduce((x, p) => x + Math.max(0, p.v[i] || 0), 0)), ...nw.map(v => v || 0), ...actual.map(v => v || 0)) || 1;
   const step = [1, 2, 2.5, 5, 10].map(m => m * 10 ** Math.floor(Math.log10(top / 4))).find(s => top / s <= 5);
   const max = Math.ceil(top / step) * step, y = v => T + (H - T - B) * (1 - v / max), cw = (W - L - R) / n, x = i => L + cw * (i + 0.5);
   let svg = '';
   for (let v = 0; v <= max + 1; v += step) svg += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v ? phpM(v) : '0'}</text>`;
   // Phases (Sandisk / PH work / Retired) across the top, with a divider where one ends
   for (let i = 0, j; i < n; i = j) {
-    for (j = i + 1; j < n && d.phases[j] === d.phases[i]; j++);
+    for (j = i + 1; j < n && phases[j] === phases[i]; j++);
     if (i) svg += `<line x1="${L + cw * i}" x2="${L + cw * i}" y1="${T - 14}" y2="${H - B}" stroke="var(--muted)" stroke-dasharray="3 3" opacity=".6"/>`;
-    svg += `<text x="${L + cw * (i + j) / 2}" y="${T - 12}" text-anchor="middle">${esc(d.phases[i] || '')}</text>`;
+    // A one-year phase is too narrow to centre its name: hang it off the divider instead
+    const one = j - i === 1, at = one ? (i < k ? `x="${L + cw * j - 3}" text-anchor="end"` : `x="${L + cw * i + 3}" text-anchor="start"`) : `x="${L + cw * (i + j) / 2}" text-anchor="middle"`;
+    svg += `<text ${at} y="${T - 12}">${esc(phases[i] || '')}</text>`;
   }
   Y.forEach((yr, i) => {
     let base = 0;
+    const cp = i < k && d.chartPre && d.chartPre.year === yr ? d.chartPre.parts : null;
+    if (cp) for (const p of parts) p.v[i] = cp[p.k] != null ? cp[p.k] : null;
+    if (i < k && !cp && actual[i] > 0) svg += `<rect x="${x(i) - cw * .32}" width="${cw * .64}" y="${y(actual[i])}" height="${y(0) - y(actual[i])}" fill="var(--muted)" opacity=".35"/>`;
     for (const p of parts) { const v = Math.max(0, p.v[i] || 0); if (v) svg += `<rect x="${x(i) - cw * .32}" width="${cw * .64}" y="${y(base + v)}" height="${y(base) - y(base + v)}" fill="var(--viz${p.c})"/>`; base += v; }
-    if (n <= 12 || i % 2 === 0 || i === n - 1) svg += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${yr}</text>`;
+    if (n <= 12 || (i - k) % 2 === 0 || i === n - 1 || i < k) svg += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${yr}</text>`;
   });
-  const pts = nw.map((v, i) => (v == null ? null : `${x(i)},${y(v)}`)).filter(Boolean).join(' ');
+  // The line starts at the last actual year before the projection
+  const pts = nw.map((v, i) => (v == null ? (i === k - 1 && actual[i] != null ? `${x(i)},${y(actual[i])}` : null) : `${x(i)},${y(v)}`)).filter(Boolean).join(' ');
   svg += `<polyline points="${pts}" fill="none" stroke="var(--ink)" stroke-width="2"/>`;
   nw.forEach((v, i) => { if (v != null) svg += `<circle cx="${x(i)}" cy="${y(v)}" r="2.5" fill="var(--ink)"/>`; });
   actual.forEach((v, i) => { if (v != null) svg += `<circle cx="${x(i)}" cy="${y(v)}" r="4.5" fill="var(--accent)" stroke="var(--panel)" stroke-width="1.5"/>`; });
   // One hover target per year
   Y.forEach((yr, i) => {
-    const tip = `${yr}${d.phases[i] ? ' (' + d.phases[i] + ')' : ''}: net worth ${phpM(nw[i])}${actual[i] != null ? ', actual ' + phpM(actual[i]) : ''}. ` + parts.map(p => `${p.k} ${phpM(p.v[i])}`).join(', ');
+    const cpn = d.chartPre && d.chartPre.year === yr && d.chartPre.note ? ` (${d.chartPre.note.replace(/^\d{4}:\s*/, '')})` : '';
+    const tip = i < k ? `${yr}: actual net worth ${phpM(actual[i])}${cpn}. ` + (cpn ? parts.map(p => `${p.k} ${phpM(p.v[i])}`).join(', ') : '') : `${yr}${phases[i] ? ' (' + phases[i] + ')' : ''}: net worth ${phpM(nw[i])}${actual[i] != null ? ', actual ' + phpM(actual[i]) : ''}. ` + parts.map(p => `${p.k} ${phpM(p.v[i])}`).join(', ');
     svg += `<rect x="${L + cw * i}" y="${T}" width="${cw}" height="${H - T - B}" fill="transparent" data-tip="${esc(tip)}" tabindex="0" aria-label="${esc(tip)}"/>`;
   });
   const legend = parts.map(p => `<span><i style="background:var(--viz${p.c})"></i>${esc(p.k)}</span>`).join('') + '<span><i class="ln" style="background:var(--ink)"></i>Net worth</span>'
@@ -3426,6 +3500,44 @@ const nwFact = a => x => {
   const memo = x.memo == null || x.memo === '' ? '' : `<small class="nw-n">${esc(label)} ${nwVal(x.label.replace(/\/ PHP$/, ''), x.memo)}</small>`;
   return `<div class="pd-fact"><span>${esc(x.label)}${note ? `<small class="nw-n">${esc(String(note))}</small>` : ''}</span><b>${nwVal(x.label, x.v)}${memo}</b></div>`;
 };
+// Actual vs plan: each year-end actual against the frozen plan. Shows the years with an actual, then the next one to come.
+function nwTracker(tr) {
+  if (!tr) return '';
+  let upto = tr.actual.reduce((m, v, j) => (v != null ? j : m), -1) + 1;
+  upto = Math.min(tr.years.length - 1, Math.max(upto, 0));
+  const pc = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(1) + '%';
+  const sg = v => (v > 0 ? '+' : v < 0 ? '−' : '') + phpM(Math.abs(v)).replace('–', '₱0');
+  const rows = tr.years.slice(0, upto + 1).map((y, j) => {
+    const pl = tr.plan[j], a = tr.actual[j], v = a != null && pl != null ? a - pl : null;
+    return `<tr><td>${y}</td><td class="r">${phpM(pl)}</td><td class="r">${a == null ? '<span class="nw-wait">Not yet</span>' : phpM(a)}</td><td class="r ${v == null ? '' : v >= 0 ? 'nw-up' : 'nw-dn'}">${v == null ? '' : sg(v)}</td><td class="r b-hide-m ${v == null ? '' : v >= 0 ? 'nw-up' : 'nw-dn'}">${v == null || !pl ? '' : pc(a / pl - 1)}</td></tr>`;
+  }).join('');
+  const later = tr.years.length - upto - 1;
+  return `<div class="b-card"><h3>Actual vs plan</h3>
+    <div class="b-scroll"><table class="b-t"><thead><tr><th>Year</th><th class="r">Plan</th><th class="r">Actual</th><th class="r">Variance</th><th class="r b-hide-m">Variance %</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="nw-yn">Year-end figures.${tr.planNote ? ` Plan frozen on ${esc(tr.planNote)}.` : ''}${later > 0 ? ` ${later} more years (to ${tr.years[tr.years.length - 1]}) appear as each December's actual is entered.` : ''}</div>
+  </div>`;
+}
+// Year to date vs target, from the block at T4 of the nwp sheet
+function nwYtd(y) {
+  if (!y || !y.items.length) return '';
+  const V = p => { const x = y.items.find(x => x.label.toLowerCase().startsWith(p)); return x ? x.v : null; };
+  const full = V('full-year'), days = V('days'), tgt = V('target return'), act = V('actual return'), gap = V('ahead'), pct = V('% vs');
+  if (typeof tgt !== 'number' || typeof act !== 'number') return '';
+  const yr = (y.title.match(/\d{4}/) || [])[0], ahead = (typeof gap === 'number' ? gap : act - tgt) >= 0;
+  const inYear = yr && +yr % 4 === 0 ? 366 : 365, pc = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v * 100).toFixed(1) + '%';
+  const top = Math.max(full || 0, tgt, act) || 1, w = v => Math.max(0, Math.min(100, v / top * 100)).toFixed(1) + '%';
+  const bar = (l, v, cls) => `<div class="nw-yb"><span>${l}</span><div class="nw-yt"><i class="${cls}" style="width:${w(v)}"></i>${typeof full === 'number' ? `<b style="left:${w(full)}" title="Full-year target"></b>` : ''}</div><span class="r">${phpM(v)}</span></div>`;
+  return `<div class="b-card nw-ytd"><h3>${yr ? yr + ' year to date vs target' : esc(y.title)}<span class="nw-st ${ahead ? 'up' : 'dn'}">${esc(V('status') || (ahead ? 'Ahead of target' : 'Behind target'))}</span></h3>
+    <div class="b-kpis">
+      ${kpi('Actual return to date', phpM(act), 'Excluding deposits')}
+      ${kpi('Target to date', phpM(tgt), typeof days === 'number' ? `Day ${days} of ${inYear}` : '')}
+      ${kpi(ahead ? 'Ahead of target' : 'Behind target', phpM(Math.abs(typeof gap === 'number' ? gap : act - tgt)), typeof pct === 'number' ? pc(pct) + ' vs target to date' : '')}
+      ${typeof full === 'number' ? kpi(`Full-year target${yr ? ' ' + yr : ''}`, phpM(full), `${Math.round(act / full * 100)}% reached so far`) : ''}
+    </div>
+    ${bar('Target', tgt, 'tg')}${bar('Actual', act, ahead ? 'up' : 'dn')}
+    ${typeof full === 'number' ? '<div class="nw-yn">The line marks the full-year target.</div>' : ''}
+  </div>`;
+}
 function renderNwp() {
   const d = P.data.nwp;
   if (!d || !d.years.length) return pdEmpty("Couldn't read the nwp sheet.");
@@ -3437,6 +3549,9 @@ function renderNwp() {
   const pc = v => +(v * 100).toFixed(1) + '%';
   const group = t => (d.groups.find(x => x.title.startsWith(t)) || { rows: [] }).rows;
   const liab = group('LIABILITIES'), cut = liab.indexOf('NET WORTH');
+  const tr = d.tracker, past = tr ? tr.years.map((y, j) => ({ y, v: tr.actual[j] })).filter(r => r.y < d.years[0] && r.v != null) : [];
+  const last = past.length ? past[past.length - 1].v : null;
+  const chg0 = chg[0] == null && last != null && nw[0] != null ? nw[0] - last : chg[0], gr0 = gr[0] == null && last ? chg0 / last : gr[0];
   return `
     <div class="b-kpis">
       ${kpi('Net worth now', phpM(nw[0]), usd[0] != null ? usdFmt(usd[0]) : '')}
@@ -3444,10 +3559,13 @@ function renderNwp() {
       ${kpi(`In ${d.years[n - 1]}`, phpM(nw[n - 1]), real[n - 1] != null ? `${phpM(real[n - 1])} in today's pesos` : '')}
       ${cagr != null ? kpi('Yearly growth', pc(cagr), target != null ? `Target ${pc(target)}${Math.abs(gap) >= 0.0005 ? `, ${gap > 0 ? 'above' : 'below'} by ${pc(Math.abs(gap))}` : ', on target'}` : '') : ''}
     </div>
+    ${nwYtd(d.ytd)}
     <div class="b-card"><h3>Projected net worth</h3>${nwChart(d, S)}</div>
     <div class="b-card"><h3>Year by year</h3><div class="b-scroll"><table class="b-t"><thead><tr><th>Year</th><th class="b-hide-m">Phase</th><th class="r">Net worth</th><th class="r">Change</th><th class="r b-hide-m">Growth</th><th class="r">Today's pesos</th><th class="r b-hide-m">USD</th></tr></thead><tbody>
-      ${d.years.map((y, i) => `<tr class="${i === iW ? 'pd-next' : ''}"><td>${y}</td><td class="b-hide-m">${esc(d.phases[i] || '')}</td><td class="r">${phpM(nw[i])}</td><td class="r">${chg[i] == null ? '' : (chg[i] > 0 ? '+' : '') + phpM(chg[i])}</td><td class="r b-hide-m">${gr[i] == null ? '' : pc(gr[i])}</td><td class="r">${phpM(real[i])}</td><td class="r b-hide-m">${usd[i] == null ? '' : '$' + (usd[i] / 1e6).toFixed(2) + 'M'}</td></tr>`).join('')}
+      ${past.map(r => `<tr class="nw-act"><td>${r.y}</td><td class="b-hide-m">Actual</td><td class="r">${phpM(r.v)}</td><td></td><td class="b-hide-m"></td><td></td><td class="b-hide-m"></td></tr>`).join('')}
+      ${d.years.map((y, i) => `<tr class="${i === iW ? 'pd-next' : ''}"><td>${y}</td><td class="b-hide-m">${esc(d.phases[i] || '')}</td><td class="r">${phpM(nw[i])}</td><td class="r">${(i ? chg[i] : chg0) == null ? '' : ((i ? chg[i] : chg0) > 0 ? '+' : '') + phpM(i ? chg[i] : chg0)}</td><td class="r b-hide-m">${(i ? gr[i] : gr0) == null ? '' : pc(i ? gr[i] : gr0)}</td><td class="r">${phpM(real[i])}</td><td class="r b-hide-m">${usd[i] == null ? '' : '$' + (usd[i] / 1e6).toFixed(2) + 'M'}</td></tr>`).join('')}
     </tbody></table></div></div>
+    ${nwTracker(tr)}
     ${invMore('n-assets', 'Assets and liabilities by year', nwWide(d, [...group('ASSETS'), ...(cut >= 0 ? liab.slice(0, cut + 1) : liab)]))}
     ${invMore('n-cash', 'Cash flows by year', nwWide(d, group('CASH FLOWS')))}
     ${invMore('n-asm', 'Assumptions', `<div class="pd-facts" style="margin:10px 0 0">${d.assumptions.filter(a => a.items.length).map(a => `<div class="b-card">${a.title ? `<h3 class="nw-h">${esc(a.title)}</h3>` : ''}${a.items.map(nwFact(a)).join('')}</div>`).join('')}</div>`)}`;
