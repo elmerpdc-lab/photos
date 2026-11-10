@@ -182,11 +182,11 @@ body.building #buildNote { display: block; margin: 20px; }
 body.building #photosLayout { grid-template-columns: minmax(0, 1fr); }
 body.building #photosLayout > aside, body.building #photosLayout > main > :not(#buildNote) { display: none; }
 /* Accounts tab charts */
-:root { --viz1: #2a78d6; --viz2: #eb6834; --viz3: #1baf7a; --viz4: #eda100; --viz5: #e87ba4; --viz6: #008300; }
+:root { --nw-actual: #e0262b; --viz1: #2a78d6; --viz2: #eb6834; --viz3: #1baf7a; --viz4: #eda100; --viz5: #e87ba4; --viz6: #008300; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --viz1: #3987e5; --viz2: #d95926; --viz3: #199e70; --viz4: #c98500; --viz5: #d55181; --viz6: #008300; }
+  :root:not([data-theme="light"]) { --nw-actual: #ff4d4f; --viz1: #3987e5; --viz2: #d95926; --viz3: #199e70; --viz4: #c98500; --viz5: #d55181; --viz6: #008300; }
 }
-:root[data-theme="dark"] { --viz1: #3987e5; --viz2: #d95926; --viz3: #199e70; --viz4: #c98500; --viz5: #d55181; --viz6: #008300; }
+:root[data-theme="dark"] { --nw-actual: #ff4d4f; --viz1: #3987e5; --viz2: #d95926; --viz3: #199e70; --viz4: #c98500; --viz5: #d55181; --viz6: #008300; }
 .ac-stack { display: flex; gap: 2px; height: 26px; margin: 10px 0 12px; }
 .ac-stack button { min-width: 3px; height: 100%; padding: 0; border: 0; cursor: pointer; background: var(--c); }
 .ac-stack button:first-child { border-radius: 4px 0 0 4px; }
@@ -222,6 +222,9 @@ body.building #photosLayout > aside, body.building #photosLayout > main > :not(#
 .nw-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 8px; font-size: 13px; color: var(--muted); }
 .nw-legend i { display: inline-block; width: 11px; height: 11px; margin-right: 6px; border-radius: 3px; vertical-align: -1px; }
 .nw-legend i.ln { width: 16px; height: 2px; border-radius: 0; vertical-align: 3px; }
+.nw-legend i.ln.dash { background: repeating-linear-gradient(90deg, var(--muted) 0 5px, transparent 5px 8px); }
+.nw-legend i.dia { width: 9px; height: 9px; border-radius: 1px; background: var(--nw-actual); transform: rotate(45deg); margin-left: 2px; }
+.nw-chart text.nw-lbl { fill: var(--ink); font-weight: 600; paint-order: stroke; stroke: var(--panel); stroke-width: 3px; }
 .b-t.nw-wide td:first-child { position: sticky; left: 0; z-index: 1; min-width: 190px; background: var(--panel); white-space: normal; }
 .nw-n { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; color: var(--muted); }
 .pd-fact b .nw-n { text-align: right; }
@@ -3439,15 +3442,24 @@ function nwChart(d, S) {
   const tr = d.tracker, pre = tr ? tr.years.filter(y => y < d.years[0]) : [], k = pre.length, pad = a => [...pre.map(() => null), ...a];
   const Y = [...pre, ...d.years], n = Y.length, W = 760, H = 300, L = 52, R = 8, T = 26, B = 26;
   const phases = [...pre.map(() => 'Actual'), ...d.phases];
-  const parts = [['Financial assets', 1], ['Real estate', 2], ['Vehicles & other', 3]].map(([k, c]) => ({ k, c, v: pad(d.series[k] || []) }));
-  const nw = pad(S('NET WORTH') || d.series['Net worth'] || []), plan = [];
-  const actual = tr ? Y.map(y => { const j = tr.years.indexOf(y); return j >= 0 ? tr.actual[j] : null; }) : pad(S('Actual year-end') || []);
-  const top = Math.max(...Y.map((_, i) => parts.reduce((x, p) => x + Math.max(0, p.v[i] || 0), 0)), ...nw.map(v => v || 0), ...actual.map(v => v || 0)) || 1;
+  const byYear = arr => Y.map(y => { const j = tr ? tr.years.indexOf(y) : -1; return j >= 0 ? arr[j] : null; });
+  // Bars, as in the workbook chart: assets stacked up, liabilities below zero. Past years come from column C of CHART DATA.
+  const parts = [['Financial assets', 1], ['Real estate', 2], ['Vehicles & other', 3], ['Liabilities', 5]].map(([k, c]) => ({ k, c, v: pad(d.series[k] || []) }));
+  parts.forEach(p => Y.forEach((yr, i) => { const cp = i < k && d.chartPre && d.chartPre.year === yr ? d.chartPre.parts : null; if (cp) p.v[i] = cp[p.k] != null ? cp[p.k] : null; }));
+  const nw = pad(S('NET WORTH') || d.series['Net worth'] || []);
+  const plan = tr ? byYear(tr.plan) : [];
+  // Actual: year-end figures, and for the current year today's net worth until December's is entered
+  const actual = tr ? byYear(tr.actual) : pad(S('Actual year-end') || []), iNow = k;
+  const live = iNow < n && actual[iNow] == null && nw[iNow] != null;
+  if (live) actual[iNow] = nw[iNow];
+  const pos = i => parts.reduce((x, p) => x + Math.max(0, p.v[i] || 0), 0), neg = i => parts.reduce((x, p) => x + Math.min(0, p.v[i] || 0), 0);
+  const top = Math.max(...Y.map((_, i) => pos(i)), ...[...nw, ...actual, ...plan].map(v => v || 0)) || 1;
+  const lo = Math.min(0, ...Y.map((_, i) => neg(i)));
   const step = [1, 2, 2.5, 5, 10].map(m => m * 10 ** Math.floor(Math.log10(top / 4))).find(s => top / s <= 5);
-  const max = Math.ceil(top / step) * step, y = v => T + (H - T - B) * (1 - v / max), cw = (W - L - R) / n, x = i => L + cw * (i + 0.5);
+  const max = Math.ceil(top / step) * step, y = v => T + (H - T - B) * (max - v) / (max - lo), cw = (W - L - R) / n, x = i => L + cw * (i + 0.5);
   let svg = '';
   for (let v = 0; v <= max + 1; v += step) svg += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v ? phpM(v) : '0'}</text>`;
-  // Phases (Sandisk / PH work / Retired) across the top, with a divider where one ends
+  // Phases (Actual / Current / Sandisk / PH work / Retired) across the top, with a divider where one ends
   for (let i = 0, j; i < n; i = j) {
     for (j = i + 1; j < n && phases[j] === phases[i]; j++);
     if (i) svg += `<line x1="${L + cw * i}" x2="${L + cw * i}" y1="${T - 14}" y2="${H - B}" stroke="var(--muted)" stroke-dasharray="3 3" opacity=".6"/>`;
@@ -3456,26 +3468,54 @@ function nwChart(d, S) {
     svg += `<text ${at} y="${T - 12}">${esc(phases[i] || '')}</text>`;
   }
   Y.forEach((yr, i) => {
-    let base = 0;
-    const cp = i < k && d.chartPre && d.chartPre.year === yr ? d.chartPre.parts : null;
-    if (cp) for (const p of parts) p.v[i] = cp[p.k] != null ? cp[p.k] : null;
-    if (i < k && !cp && actual[i] > 0) svg += `<rect x="${x(i) - cw * .32}" width="${cw * .64}" y="${y(actual[i])}" height="${y(0) - y(actual[i])}" fill="var(--muted)" opacity=".35"/>`;
-    for (const p of parts) { const v = Math.max(0, p.v[i] || 0); if (v) svg += `<rect x="${x(i) - cw * .32}" width="${cw * .64}" y="${y(base + v)}" height="${y(base) - y(base + v)}" fill="var(--viz${p.c})"/>`; base += v; }
+    let up = 0, dn = 0;
+    if (!parts.some(p => p.v[i]) && actual[i] > 0) svg += `<rect x="${x(i) - cw * .32}" width="${cw * .64}" y="${y(actual[i])}" height="${y(0) - y(actual[i])}" fill="var(--muted)" opacity=".35"/>`;
+    for (const p of parts) {
+      const v = p.v[i] || 0;
+      if (v > 0) { svg += `<rect x="${x(i) - cw * .32}" width="${cw * .64}" y="${y(up + v)}" height="${y(up) - y(up + v)}" fill="var(--viz${p.c})"/>`; up += v; }
+      else if (v < 0) { svg += `<rect x="${x(i) - cw * .32}" width="${cw * .64}" y="${y(dn)}" height="${Math.max(1, y(dn + v) - y(dn))}" fill="var(--viz${p.c})"/>`; dn += v; }
+    }
     if (n <= 12 || (i - k) % 2 === 0 || i === n - 1 || i < k) svg += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${yr}</text>`;
   });
-  // The line starts at the last actual year before the projection
-  const pts = nw.map((v, i) => (v == null ? (i === k - 1 && actual[i] != null ? `${x(i)},${y(actual[i])}` : null) : `${x(i)},${y(v)}`)).filter(Boolean).join(' ');
-  svg += `<polyline points="${pts}" fill="none" stroke="var(--ink)" stroke-width="2"/>`;
-  nw.forEach((v, i) => { if (v != null) svg += `<circle cx="${x(i)}" cy="${y(v)}" r="2.5" fill="var(--ink)"/>`; });
-  actual.forEach((v, i) => { if (v != null) svg += `<circle cx="${x(i)}" cy="${y(v)}" r="4.5" fill="var(--accent)" stroke="var(--panel)" stroke-width="1.5"/>`; });
+  const line = arr => arr.map((v, i) => (v == null ? null : `${x(i)},${y(v)}`)).filter(Boolean).join(' ');
+  // Updated projection: starts at the last actual year before the projection
+  const proj = nw.map((v, i) => (v == null && i === k - 1 ? actual[i] : v));
+  svg += `<polyline points="${line(proj)}" fill="none" stroke="var(--ink)" stroke-width="2"/>`;
+  proj.forEach((v, i) => { if (v != null) svg += `<circle cx="${x(i)}" cy="${y(v)}" r="2.5" fill="var(--ink)"/>`; });
+  // Plan baseline: the locked plan, dashed
+  if (plan.some(v => v != null)) {
+    svg += `<polyline points="${line(plan)}" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="6 4"/>`;
+    plan.forEach((v, i) => { if (v != null) svg += `<circle cx="${x(i)}" cy="${y(v)}" r="2.5" fill="var(--panel)" stroke="var(--muted)" stroke-width="1.2"/>`; });
+  }
+  // Actual: a red line with diamonds, as in the workbook, so it stands apart from the bars
+  if (actual.filter(v => v != null).length > 1) svg += `<polyline points="${line(actual)}" fill="none" stroke="var(--nw-actual)" stroke-width="2.5"/>`;
+  actual.forEach((v, i) => { if (v != null) { const cx = x(i), cy = y(v); svg += `<path d="M${cx} ${cy - 6}L${cx + 6} ${cy}L${cx} ${cy + 6}L${cx - 6} ${cy}Z" fill="var(--nw-actual)" stroke="var(--panel)" stroke-width="1.5"/>`; } });
+  // The label on today's point, as in the workbook ("Now 106.0M | +1.0M vs plan")
+  const gapNow = live && plan[iNow] != null ? actual[iNow] - plan[iNow] : null;
+  // Placed in the clear space above the bars and lines it would cross, with a leader down to the point
+  if (live) {
+    const txt = `Now ${phpM(actual[iNow])}${gapNow == null ? '' : ` | ${gapNow >= 0 ? '+' : '−'}₱${(Math.abs(gapNow) / 1e6).toFixed(1)}M vs plan`}`;
+    const lx = x(iNow) - 4, span = Math.ceil((txt.length * 6.2 + 4) / cw);
+    let hi = actual[iNow];
+    for (let i = iNow; i < Math.min(n, iNow + span + 1); i++) hi = Math.max(hi, pos(i), proj[i] || 0, plan[i] || 0);
+    const ly = Math.max(T + 4, y(hi) - 16), py = y(actual[iNow]) - 8;
+    svg += `<line x1="${x(iNow)}" x2="${x(iNow)}" y1="${ly + 4}" y2="${py}" stroke="var(--muted)" stroke-width="1"/>`;
+    svg += `<text class="nw-lbl" x="${lx}" y="${ly}">${esc(txt)}</text>`;
+  }
   // One hover target per year
   Y.forEach((yr, i) => {
     const cpn = d.chartPre && d.chartPre.year === yr && d.chartPre.note ? ` (${d.chartPre.note.replace(/^\d{4}:\s*/, '')})` : '';
-    const tip = i < k ? `${yr}: actual net worth ${phpM(actual[i])}${cpn}. ` + (cpn ? parts.map(p => `${p.k} ${phpM(p.v[i])}`).join(', ') : '') : `${yr}${phases[i] ? ' (' + phases[i] + ')' : ''}: net worth ${phpM(nw[i])}${actual[i] != null ? ', actual ' + phpM(actual[i]) : ''}. ` + parts.map(p => `${p.k} ${phpM(p.v[i])}`).join(', ');
+    const bits = [];
+    if (plan[i] != null) bits.push(`plan ${phpM(plan[i])}`);
+    if (i >= k && nw[i] != null) bits.push(`updated projection ${phpM(nw[i])}`);
+    if (actual[i] != null) bits.push(`${live && i === iNow ? 'now' : 'actual'} ${phpM(actual[i])}${cpn}`);
+    const tip = `${yr}${phases[i] ? ' (' + phases[i] + ')' : ''}: ${bits.join(', ')}. ` + parts.filter(p => p.v[i] != null).map(p => `${p.k} ${phpM(p.v[i])}`).join(', ');
     svg += `<rect x="${L + cw * i}" y="${T}" width="${cw}" height="${H - T - B}" fill="transparent" data-tip="${esc(tip)}" tabindex="0" aria-label="${esc(tip)}"/>`;
   });
-  const legend = parts.map(p => `<span><i style="background:var(--viz${p.c})"></i>${esc(p.k)}</span>`).join('') + '<span><i class="ln" style="background:var(--ink)"></i>Net worth</span>'
-    + (actual.some(v => v != null) ? '<span><i style="background:var(--accent);border-radius:50%"></i>Actual</span>' : '');
+  const legend = parts.map(p => `<span><i style="background:var(--viz${p.c})"></i>${esc(p.k)}</span>`).join('')
+    + (plan.some(v => v != null) ? '<span><i class="ln dash"></i>Plan baseline</span>' : '')
+    + '<span><i class="ln" style="background:var(--ink)"></i>Updated projection</span>'
+    + (actual.some(v => v != null) ? '<span><i class="dia"></i>Actual</span>' : '');
   return `<div class="b-scroll"><svg class="nw-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Projected net worth by year, ${Y[0]} to ${Y[n - 1]}">${svg}</svg></div><div class="nw-legend">${legend}</div>`;
 }
 function nwVal(label, v) {
