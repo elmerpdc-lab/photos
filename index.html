@@ -2767,11 +2767,11 @@ function renderBudget() {
           <tr class="tot"><td>Total</td><td class="r">${money(actualT)}</td><td class="r">${money(oneT)}</td><td class="r">${money(d.avgTotal)}</td><td class="r">${vs(actualT, d.avgTotal)}</td><td class="b-hide-m"></td></tr></tbody>
       </table></div>
     </div>
-    <div class="b-3">${small('By person', sumBy(spent, t => t.person))}${small('By source', sumBy(spent, t => t.source))}${small('Not counted as expense', sumBy(inMonth.filter(t => t.type === 'Excluded'), t => t.cat))}</div>
+    <div class="b-3">${small('By source', sumBy(spent, t => t.source))}${small('Not counted as expense', sumBy(inMonth.filter(t => t.type === 'Excluded'), t => t.cat))}</div>
     <div class="b-card">
       <h3>Transactions</h3>
-      <div class="b-filters">${opt('cat', 'Category', uniq('cat'))}${opt('person', 'Person', uniq('person'))}${opt('source', 'Source', uniq('source'))}${opt('type', 'Type', uniq('type').filter(t => t !== 'Excluded'))}<span class="sum" id="bTxSum"></span></div>
-      <div class="b-scroll"><table class="b-t"><thead><tr><th>Date</th><th>Merchant</th><th>Category</th><th class="b-hide-m">Person</th><th class="b-hide-m">Source</th><th class="b-hide-m">Type</th><th class="r">MYR</th></tr></thead><tbody id="bTx"></tbody></table></div>
+      <div class="b-filters">${opt('cat', 'Category', uniq('cat'))}${d.tx.some(t => t.person) ? opt('person', 'Person', uniq('person')) : ''}${opt('source', 'Source', uniq('source'))}${opt('type', 'Type', uniq('type').filter(t => t !== 'Excluded'))}<span class="sum" id="bTxSum"></span></div>
+      <div class="b-scroll"><table class="b-t"><thead><tr><th>Date</th><th>Merchant</th><th>Category</th>${d.tx.some(t => t.person) ? '<th class="b-hide-m">Person</th>' : ''}<th class="b-hide-m">Source</th><th class="b-hide-m">Type</th><th class="r">MYR</th></tr></thead><tbody id="bTx"></tbody></table></div>
     </div>
     ${d.salary.length ? `<div class="b-card"><h3>Salary allocation (estimate)</h3>
       <div class="b-scroll"><table class="b-t"><thead><tr><th>Item</th><th class="r">MYR a month</th><th class="r b-hide-m">PHP a month</th><th class="r b-hide-m">Rate or share</th></tr></thead>
@@ -2796,10 +2796,11 @@ function renderBudgetTx() {
     g.fees++; g.myr += t.myr; g.merchant = `UOW (${g.fees} fees)`;
     if (g.type !== t.type) g.type = 'Mixed';
   }
+  const hasP = d.tx.some(t => t.person);
   body.innerHTML = rows.map(t => `<tr><td style="white-space:nowrap">${serialDate(t.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' })}</td>
     <td>${esc(t.merchant)}</td>
-    <td>${esc(t.cat)}</td><td class="b-hide-m">${esc(t.person)}</td><td class="b-hide-m">${esc(t.source)}</td><td class="b-hide-m">${esc(t.type)}</td><td class="r">${money(t.myr, 2)}</td></tr>`).join('')
-    || '<tr><td colspan="7">No transactions match.</td></tr>';
+    <td>${esc(t.cat)}</td>${hasP ? `<td class="b-hide-m">${esc(t.person)}</td>` : ''}<td class="b-hide-m">${esc(t.source)}</td><td class="b-hide-m">${esc(t.type)}</td><td class="r">${money(t.myr, 2)}</td></tr>`).join('')
+    || `<tr><td colspan="${hasP ? 7 : 6}">No transactions match.</td></tr>`;
   $('#bTxSum').textContent = `${fmtN(rows.length)} item${rows.length === 1 ? '' : 's'} · MYR ${money(list.reduce((a, t) => a + t.myr, 0), 2)}`;
 }
 
