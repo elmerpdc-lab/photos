@@ -253,7 +253,15 @@ body.building #photosLayout > aside, body.building #photosLayout > main > :not(#
 .b-months button { padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
 .b-months button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .b-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 14px; }
-.nw-ytd .b-kpis { margin: 10px 0 12px; }
+.nw-ytd .b-kpis, .sn-pay { margin: 10px 0 12px; }
+.sn-view { margin: 8px 0 12px; align-items: center; }
+.sn-view .b-sub { margin-right: 4px; }
+.sn-hold-body { display: grid; grid-template-columns: 180px 1fr; gap: 24px; align-items: center; }
+.sn-donut { width: 180px; height: 180px; }
+.sn-sw { display: inline-block; width: 4px; height: 16px; border-radius: 2px; margin-right: 8px; vertical-align: -3px; }
+.sn-help { color: var(--muted); cursor: help; }
+@media (max-width: 860px) { .sn-hold-body { grid-template-columns: 1fr; gap: 10px; } .sn-donut { width: 140px; height: 140px; margin: 0 auto; } }
+.sn-hold .b-t td:first-child { white-space: nowrap; }
 .nw-ytd h3 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .nw-st { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
 .nw-st.up { color: var(--viz3); background: color-mix(in srgb, var(--viz3) 14%, transparent); }
@@ -435,7 +443,7 @@ body.building #photosLayout > aside, body.building #photosLayout > main > :not(#
 <!-- ============ screens ============ -->
 <section class="screen" id="scr-setup" hidden>
   <div class="card">
-    <h1>Almost ready</h1>
+    <h1>Almost Ready</h1>
     <p>This dashboard needs a Microsoft app registration before anyone can sign in.</p>
     <ol>
       <li>Follow <code>SETUP.md</code> to register a free app and get its <b>client ID</b>.</li>
@@ -468,7 +476,7 @@ body.building #photosLayout > aside, body.building #photosLayout > main > :not(#
 
 <section class="screen" id="scr-link" hidden>
   <div class="card">
-    <h1>Where are the photos?</h1>
+    <h1>Where Are the Photos?</h1>
     <p>We couldn't find the shared Photos folder in your OneDrive. Paste the link you received for it (from the sharing email, or <b>Shared</b> in OneDrive → the folder → <b>Copy link</b>).</p>
     <input class="field" id="linkInput" placeholder="https://1drv.ms/f/…" autocomplete="off">
     <p class="err" id="linkErr"></p>
@@ -479,7 +487,7 @@ body.building #photosLayout > aside, body.building #photosLayout > main > :not(#
 
 <section class="screen" id="scr-error" hidden>
   <div class="card">
-    <h1>Something went wrong</h1>
+    <h1>Something Went Wrong</h1>
     <p class="err" id="errText"></p>
     <button class="btn primary" onclick="location.reload()">Try again</button>
   </div>
@@ -523,7 +531,7 @@ body.building #photosLayout > aside, body.building #photosLayout > main > :not(#
   <div class="layout" id="photosLayout">
     <aside class="filters" id="filters">
       <div class="fgroup owner-box" id="ownerBox" hidden>
-        <h3>Only you see this</h3>
+        <h3>Only You See This</h3>
         <button class="btn" id="btnReview">Review clutter</button>
         <button class="btn" id="btnSelect">Select photos</button>
         <p class="places-note" id="ownerNote" style="margin:2px 0 0"></p>
@@ -550,7 +558,7 @@ body.building #photosLayout > aside, body.building #photosLayout > main > :not(#
         <div id="folders"></div>
       </div>
       <div class="fgroup" id="catsGroup">
-        <h3>More categories</h3>
+        <h3>More Categories</h3>
         <div id="cats"></div>
       </div>
       <p style="font-size:12px;color:var(--muted)" id="catalogInfo"></p>
@@ -561,7 +569,7 @@ body.building #photosLayout > aside, body.building #photosLayout > main > :not(#
       <div class="b-state" id="buildNote" role="status">Loading photos…</div>
       <div class="summary">
         <button class="btn mobile-only" id="btnFilters2" style="padding:5px 12px">Filters</button>
-        <h2 id="viewTitle">All photos</h2>
+        <h2 id="viewTitle">All Photos</h2>
         <span class="count" id="viewCount"></span>
         <span class="spacer"></span>
         <button class="btn" id="btnMap" style="padding:5px 12px;font-size:13px" aria-pressed="false">
@@ -587,12 +595,12 @@ body.building #photosLayout > aside, body.building #photosLayout > main > :not(#
       </section>
 
       <section class="panel" id="timelinePanel">
-        <div class="panel-head"><h3>Through the years</h3><small id="timelineHint">Tap a year to filter</small></div>
+        <div class="panel-head"><h3>Through the Years</h3><small id="timelineHint">Tap a year to filter</small></div>
         <div class="timeline" id="timeline"></div>
       </section>
 
       <section class="panel" id="otdPanel" hidden>
-        <div class="panel-head"><h3 id="otdTitle">On this day</h3><small id="otdSub"></small></div>
+        <div class="panel-head"><h3 id="otdTitle">On This Day</h3><small id="otdSub"></small></div>
         <div class="strip" id="otd"></div>
       </section>
 
@@ -1369,9 +1377,9 @@ function renderChrome({ view, yearCounts, folderCounts, folderTotal, placeCounts
     : S.place ? S.place.split('/').pop()
     : S.tag ? '#' + S.tag
     : S.years.size === 1 ? String([...S.years][0])
-    : S.bounds ? 'Photos in this area'
+    : S.bounds ? 'Photos in This Area'
     : S.only ? catLabel(S.only)
-    : S.q ? 'Search results' : 'All photos';
+    : S.q ? 'Search Results' : 'All Photos';
   $('#viewTitle').textContent = title;
   const nv = view.filter(i => i.kind === 'video').length;
   $('#viewCount').textContent = view.length
@@ -1678,11 +1686,11 @@ function renderOnThisDay(base) {
   const panel = $('#otdPanel');
   if (S.q || S.years.size || S.folder || S.place || S.tag || S.bounds || S.only || S.review) { panel.hidden = true; return; }
   const now = new Date(), y = now.getFullYear(), md = (now.getMonth() + 1) * 100 + now.getDate();
-  let hits = base.filter(i => !i.approx && i.md === md && i.y < y), label = 'On this day';
+  let hits = base.filter(i => !i.approx && i.md === md && i.y < y), label = 'On This Day';
   if (!hits.length) {
     const near = new Set();
     for (let k = -3; k <= 3; k++) { const d = new Date(now); d.setDate(d.getDate() + k); near.add((d.getMonth() + 1) * 100 + d.getDate()); }
-    hits = base.filter(i => !i.approx && near.has(i.md) && i.y < y); label = 'This week, years ago';
+    hits = base.filter(i => !i.approx && near.has(i.md) && i.y < y); label = 'This Week, Years Ago';
   }
   if (!hits.length) { panel.hidden = true; return; }
   // Spread across years: a few from each year, newest years first
@@ -1754,7 +1762,7 @@ function renderGrid() {
   root.innerHTML = '';
   rendered = 0; lastGroup = null; lastGrid = null;
   if (!VIEW.length) {
-    root.innerHTML = `<div class="empty"><h3>No photos found</h3><p>Try a different search, or clear some filters.</p></div>`;
+    root.innerHTML = `<div class="empty"><h3>No Photos Found</h3><p>Try a different search, or clear some filters.</p></div>`;
     return;
   }
   renderMore();
@@ -2675,6 +2683,42 @@ async function loadBudget(force = false) {
 
 const sumBy = (list, keyOf) => { const m = new Map(); for (const t of list) { const k = keyOf(t); m.set(k, (m.get(k) || 0) + t.myr); } return m; };
 
+// Title Case for headings: card titles, fold-out section titles and summary-box labels in the Budget and workbook tabs.
+// Short joining words stay lower case (except first and last); words that already have capitals (ESPP, USD, iPhone) are left alone.
+const TC_SMALL = new Set(['a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'in', 'nor', 'of', 'on', 'or', 'per', 'the', 'to', 'via', 'vs', 'vs.']);
+function titleCase(str, first = true) {
+  const words = str.split(/(\s+)/);
+  const last = words.length - 1 - [...words].reverse().findIndex(w => /\S/.test(w));
+  let start = first, out = '';
+  words.forEach((w, i) => {
+    if (!/\S/.test(w)) { out += w; return; }
+    out += w.split('-').map((part, j) => {
+      const m = part.match(/^([^A-Za-z]*)([a-z][a-z']*)(.*)$/);
+      if (!m || /[A-Z]/.test(m[2])) return part;
+      const lower = TC_SMALL.has(m[2]) && !(start && j === 0) && !(i === last && j === 0) && !/^[(:]/.test(m[1]);
+      return lower ? part : m[1] + m[2][0].toUpperCase() + m[2].slice(1) + m[3];
+    }).join('-');
+    start = /[:—–]$/.test(w);
+  });
+  return out;
+}
+function titleCaseIn(root) {
+  if (!root) return;
+  root.querySelectorAll('h2, h3, summary, .b-kpi .l').forEach(el => {
+    const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let n, first = true;
+    while ((n = tw.nextNode())) {
+      if (n.parentElement.closest('.nw-st, .sn-help, .b-sub, small, b, i')) continue;
+      const t = titleCase(n.nodeValue, first);
+      if (t !== n.nodeValue) n.nodeValue = t;
+      if (/\S/.test(n.nodeValue)) first = false;
+    }
+  });
+}
+['#bBody', '#pdBody'].forEach(sel => {
+  const el = document.querySelector(sel);
+  if (el) new MutationObserver(() => titleCaseIn(el)).observe(el, { childList: true, subtree: true });
+});
 function renderBudget() {
   const d = B.data; if (!d) return;
   const months = [...new Set(d.tx.filter(t => t.type !== 'Excluded' && t.ym).map(t => t.ym))].sort();
@@ -2778,7 +2822,7 @@ function bindBudgetUI() {
    in this page or on GitHub). Read-only: it shows the values Excel last saved. Sections are found by their
    labels, so added rows don't break anything. Downloaded only when the file has changed.
    ===================================================================== */
-const PD_TABS = ['props', 'ins', 'rwd', 'inv', 'acct', 'sndk', 'nwp'], PD_V = 12;   // bump PD_V when parsePD changes, so saved copies are re-read
+const PD_TABS = ['props', 'ins', 'rwd', 'inv', 'acct', 'sndk', 'nwp'], PD_V = 13;   // bump PD_V when parsePD changes, so saved copies are re-read
 const P = { data: null, eTag: '', saved: '', checked: 0, root: null, busy: false, prop: 'overview', sched: 'next', q: '', rtype: '', rall: false, ill: 0, inv: 'usd', hold: '', pstk: '', pfnd: '', acOwner: '', acClass: '', acZero: false, acSort: { k: 'Peso Value', d: -1 }, open: {} };
 // Always owner only, whatever config.js says; family members never receive these sheets
 const OWNER_TABS = ['sndk', 'nwp'];
@@ -2921,7 +2965,7 @@ function parseSndk(wb) {
   const end = iE >= 0 ? iE : iM + 8;
   return { accounts: pdLoose(g, '', 'Account Alias'), returns: pdPairs(g, iM + 1, end, 0), market: pdPairs(g, iM + 1, end, 3), cash: pdPairs(g, iM + 1, end, 6),
     grants: pdLoose(g, 'Equity Awards', 'Grant ID'), lots: pdLoose(g, 'Lots Acquired', 'Lot ID'), trades: pdLoose(g, 'Transactions', 'Date'),
-    perf: pdLoose(g, 'Monthly Performance', 'Date'), espp: pdLoose(g, 'ESPP Contributions', 'Date') };
+    perf: pdLoose(g, 'Monthly Performance', 'Date'), espp: pdLoose(g, 'ESPP Contributions', 'Date'), payroll: pdLoose(g, 'Salary & Payroll', 'Pay Date') };
 }
 // Net worth projection: one value per year (columns D onwards), by row label, plus the assumptions above it
 function parseNwp(wb) {
@@ -3408,6 +3452,71 @@ function renderInv() {
 }
 
 const pdEmpty = t => `<div class="b-card"><p class="b-sub" style="margin:0">${esc(t)}</p></div>`;
+// Holdings summary, laid out like E*TRADE's: by status (vested / unvested / cash) or by equity type (ESPP / restricted stock)
+function sndkHold(d) {
+  const num = v => (typeof v === 'number' ? v : 0), isEspp = r => /ESPP/i.test(String(r.Plan || ''));
+  const sum = (rows, k) => rows.reduce((x, r) => x + num(r[k]), 0);
+  const G = d.grants.rows, Lt = d.lots.rows;
+  const unvQ = sum(G, 'Unvested'), unvV = sum(G, 'Unvested Value'), heldQ = sum(Lt, 'Shares Held'), heldV = sum(Lt, 'Market Value');
+  const cash = num((d.cash.find(x => /^Total Cash/i.test(x.label)) || {}).v);
+  const byType = [
+    { k: 'Employee Stock Purchase Plan', c: 'var(--viz4)', q: sum(G.filter(isEspp), 'Unvested') + sum(Lt.filter(isEspp), 'Shares Held'), v: sum(G.filter(isEspp), 'Unvested Value') + sum(Lt.filter(isEspp), 'Market Value'), always: 1 },
+    { k: 'Restricted Stock', c: 'var(--viz1)', q: sum(G.filter(r => !isEspp(r)), 'Unvested') + sum(Lt.filter(r => !isEspp(r)), 'Shares Held'), v: sum(G.filter(r => !isEspp(r)), 'Unvested Value') + sum(Lt.filter(r => !isEspp(r)), 'Market Value'), always: 1 },
+  ];
+  const byStatus = [
+    { k: 'Vested', c: 'var(--viz3)', q: heldQ, v: heldV },
+    { k: 'Unvested', c: 'var(--viz4)', q: unvQ, v: unvV, always: 1 },
+    { k: 'Cash', c: 'var(--viz1)', q: null, v: cash },
+  ];
+  const view = P.snView === 'type' ? 'type' : 'status';
+  const segs = (view === 'type' ? byType : byStatus).filter(x => x.always || Math.abs(x.v) >= 0.005);
+  const total = segs.reduce((x, s) => x + s.v, 0), totalQ = segs.reduce((x, s) => x + (s.q || 0), 0);
+  if (!total && !G.length && !Lt.length) return '';
+  // Donut: one ring, a segment per row with a value
+  const R = 70, C = 2 * Math.PI * R;
+  let at = 0, ring = `<circle cx="90" cy="90" r="${R}" fill="none" stroke="var(--chip)" stroke-width="22"/>`;
+  for (const x of segs) {
+    if (!(x.v > 0) || !total) continue;
+    const len = x.v / total * C;
+    ring += `<circle cx="90" cy="90" r="${R}" fill="none" stroke="${x.c}" stroke-width="22" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-at}" transform="rotate(-90 90 90)"><title>${esc(x.k)} ${usdFmt(x.v, 2)}</title></circle>`;
+    at += len;
+  }
+  const pc = v => (total ? v / total * 100 : 0).toFixed(2) + '%', q = v => (v == null ? '' : money(v, 2));
+  const row = (x, sw) => `<tr><td>${sw ? `<i class="sn-sw" style="background:${x.c}"></i>` : ''}${esc(x.k)}</td><td class="r">${pc(x.v)}</td><td class="r">${q(x.q)}</td><td class="r">${usdFmt(x.v, 2)}</td></tr>`;
+  const lead = view === 'status' && unvV > 0 ? `<tr><td>Potential Benefit Value <span class="sn-help" title="What your unvested awards would be worth at today's price, if they vest">ⓘ</span></td><td class="r">${pc(unvV)}</td><td class="r">${q(unvQ)}</td><td class="r">${usdFmt(unvV, 2)}</td></tr>` : '';
+  return `<div class="b-card sn-hold">
+    <h3>Holdings Summary: Total Account Value ${usdFmt(total, 2)}</h3>
+    <div class="b-months sn-view" role="group" aria-label="View by"><span class="b-sub">View by</span><button data-snview="status" class="${view === 'status' ? 'on' : ''}">Status</button><button data-snview="type" class="${view === 'type' ? 'on' : ''}">Equity Type</button></div>
+    <div class="sn-hold-body">
+      <svg class="sn-donut" viewBox="0 0 180 180" role="img" aria-label="Holdings by ${view === 'type' ? 'equity type' : 'status'}">${ring}</svg>
+      <div class="b-scroll"><table class="b-t"><thead><tr><th>${view === 'type' ? 'Equity Type' : 'Holding Status'}</th><th class="r">Allocation</th><th class="r">Quantity</th><th class="r">Value</th></tr></thead><tbody>
+        ${lead}${segs.map(x => row(x, true)).join('')}
+        <tr class="tot"><td>Total</td><td class="r">${total ? '100.00%' : '0.00%'}</td><td class="r">${q(totalQ)}</td><td class="r">${usdFmt(total, 2)}</td></tr>
+      </tbody></table></div>
+    </div>
+  </div>`;
+}
+// Salary & Payroll (payslips), in the payslip currency (MYR). Rows with no pay yet are the template's future dates.
+function sndkPay(t) {
+  if (!t || !t.rows) return '';
+  const rows = t.rows.filter(r => (r['Gross Pay'] || 0) > 0);
+  if (!rows.length) return '';
+  const cur = rows[rows.length - 1].Currency || 'MYR', sym = cur === 'MYR' ? 'RM' : cur + ' ';
+  const m = (n, dp = 0) => (n < 0 ? '−' : '') + sym + money(Math.abs(n), dp);
+  const last = rows.reduce((a, r) => ((r['Pay Date'] || 0) > (a['Pay Date'] || 0) ? r : a), rows[0]), T = t.total || {};
+  const yr = typeof last['Pay Date'] === 'number' ? serialDate(last['Pay Date']).getUTCFullYear() : '';
+  const epf = (T['EPF (Employee)'] || 0) + (T['EPF (Employer)'] || 0);
+  return `<div class="b-card"><h3>Salary and payroll</h3>
+    <div class="b-kpis sn-pay">
+      ${kpi(`Gross pay ${yr}`, m(last['YTD Gross'] ?? T['Gross Pay'] ?? 0), `${rows.length} payslip${rows.length > 1 ? 's' : ''}, last ${dayLabel(last['Pay Date'])}`)}
+      ${kpi('Net pay', m(last['YTD Net'] ?? T['Net Pay'] ?? 0), `Last payslip ${m(last['Net Pay'] || 0, 2)}`)}
+      ${kpi('EPF', m(epf), `You ${m(T['EPF (Employee)'] || 0)}, employer ${m(T['EPF (Employer)'] || 0)}`)}
+      ${kpi('Income tax (PCB)', m(last['YTD Tax'] ?? T['PCB / Income Tax'] ?? 0), (last['YTD ESPP'] || T['ESPP Deduction']) ? `ESPP ${m(last['YTD ESPP'] || T['ESPP Deduction'])}` : '')}
+    </div>
+    ${invTable({ rows: newestFirst(rows, 'Pay Date'), total: t.total }, [['Pay Date', 'date', { label: 'Paid' }], ['Pay Period', 'text', { label: 'Period', hide: 1 }], ['Basic Salary', 'money2', { label: 'Basic', hide: 1 }], ['Allowances', 'money2', { hide: 1 }], ['Bonus / Commission', 'money2', { label: 'Bonus', hide: 1 }], ['Gross Pay', 'money2', { label: 'Gross' }], ['EPF (Employee)', 'money2', { label: 'EPF', hide: 1 }], ['PCB / Income Tax', 'money2', { label: 'Tax', hide: 1 }], ['ESPP Deduction', 'money2', { label: 'ESPP', hide: 1 }], ['Total Deductions', 'money2', { label: 'Deductions', hide: 1 }], ['Net Pay', 'money2', { label: 'Net' }]], m)}
+    ${invMore('k-payn', 'Payslip notes', rows.filter(r => r.Notes).map(r => `<div class="pd-fact"><span>${dayLabel(r['Pay Date'])}</span><b style="font-weight:400;text-align:right">${esc(String(r.Notes))}</b></div>`).join('') || '<p>No notes.</p>')}
+  </div>`;
+}
 function renderSndk() {
   const d = P.data.sndk;
   if (!d) return pdEmpty("Couldn't read the sndk sheet.");
@@ -3416,23 +3525,29 @@ function renderSndk() {
   const pairs = (list, fmt) => list.map(x => `<div class="pd-fact"><span>${esc(x.label)}</span><b>${typeof x.v === 'number' ? fmt(x.v, x.label) : esc(String(x.v))}</b></div>`).join('');
   const espp = val(d.market, 'ESPP Contrib');
   const any = d.grants.rows.length || d.lots.rows.length || d.trades.rows.length || d.espp.rows.length;
+  const unv = d.grants.total ? d.grants.total.Unvested : null;
+  const next = d.grants.rows.map(r => r['Next Vest Date']).filter(v => typeof v === 'number').sort((a, b) => a - b)[0];
+  const fx = val(d.market, 'USD/PHP');
   return `
     <div class="b-kpis">
+      ${t['Paper Value'] != null ? kpi('Paper value', f(t['Paper Value']), [typeof fx === 'number' ? phpFmt(t['Paper Value'] * fx) : '', 'vested and unvested'].filter(Boolean).join(', ')) : ''}
       ${kpi('Net liquidity', f(t['Net Liquidity'] || 0), t['Peso Value'] ? phpFmt(t['Peso Value']) : '')}
-      ${kpi('Unvested value', f(t['Unvested Value'] || 0))}
+      ${kpi('Unvested value', f(t['Unvested Value'] || 0), [typeof unv === 'number' ? `${money(unv)} shares` : '', next ? 'next vest ' + dayLabel(next) : ''].filter(Boolean).join(', '))}
       ${kpi('Unrealized', plus(t.Unrealized || 0, f))}
       ${comp != null ? kpi('Total comp income', f(comp)) : ''}
       ${price != null ? kpi('SNDK price', f(price, 2), typeof asOf === 'number' ? 'As of ' + dayLabel(asOf) : '') : ''}
     </div>
+    ${sndkHold(d)}
     <div class="pd-facts">
       <div class="b-card"><h3>Returns</h3>${pairs(d.returns.filter(x => !/comp income/i.test(x.label)), v => pct2(v))}</div>
       <div class="b-card"><h3>Cash</h3>${pairs(d.cash, v => f(v, 2))}${typeof espp === 'number' ? `<div class="pd-fact"><span>ESPP contribution</span><b>${+(espp * 100).toFixed(2)}%</b></div>` : ''}</div>
     </div>
     ${any ? '' : pdEmpty('No grants, purchases or sales entered yet. They show here once they are in the sndk sheet.')}
-    ${d.grants.rows.length ? `<div class="b-card"><h3>Grants and ESPP offerings</h3>${invTable(d.grants, [['Grant ID', 'text'], ['Plan', 'text'], ['Grant Date', 'date'], ['Shares Granted', 'qty', { label: 'Granted' }], ['Grant FMV', 'money2', { hide: 1 }], ['Vesting Schedule', 'text', { label: 'Vesting', hide: 1 }], ['Next Vest Date', 'date', { label: 'Next vest' }], ['Final Vest Date', 'date', { label: 'Final vest', hide: 1 }], ['Shares Vested', 'qty', { label: 'Vested', hide: 1 }], ['Unvested', 'qty', { hide: 1 }], ['Unvested Value', 'money'], ['% Vested', 'pct', { hide: 1 }], ['Status', 'text', { hide: 1 }]], f)}</div>` : ''}
+    ${d.grants.rows.length ? `<div class="b-card"><h3>Grants and ESPP offerings</h3>${invTable(d.grants, [['Grant ID', 'text'], ['Plan', 'text'], ['Grant Date', 'date'], ['Shares Granted', 'qty', { label: 'Granted' }], ['Grant Value (USD)', 'money', { label: 'Grant value', hide: 1 }], ['Grant FMV', 'money2', { hide: 1 }], ['Vesting Schedule', 'text', { label: 'Vesting', hide: 1 }], ['Next Vest Date', 'date', { label: 'Next vest' }], ['Final Vest Date', 'date', { label: 'Final vest', hide: 1 }], ['Shares Vested', 'qty', { label: 'Vested', hide: 1 }], ['Unvested', 'qty', { hide: 1 }], ['Unvested Value', 'money'], ['% Vested', 'pct', { hide: 1 }], ['Status', 'text', { hide: 1 }]], f)}</div>` : ''}
     ${d.lots.rows.length ? `<div class="b-card"><h3>Shares acquired</h3>${invTable(d.lots, [['Lot ID', 'text', { label: 'Lot' }], ['Plan', 'text'], ['Acquired Date', 'date', { label: 'Acquired' }], ['Shares Acquired', 'qty', { label: 'Acquired', hide: 1 }], ['FMV at Acquisition', 'money2', { label: 'FMV', hide: 1 }], ['Purchase Price', 'money2', { hide: 1 }], ['Shares Held', 'qty', { label: 'Held' }], ['Cost Basis', 'money', { hide: 1 }], ['Market Value', 'money', { label: 'Value' }], ['Unrealized', 'signed'], ['Unrealized %', 'pct', { hide: 1 }], ['LT/Qualifying Date', 'date', { label: 'Qualifying', hide: 1 }], ['Status', 'text', { hide: 1 }]], f)}</div>` : ''}
     ${d.trades.rows.length ? invMore('k-tr', 'Sales, dividends and cash', invTable({ rows: newestFirst(d.trades.rows, 'Date'), total: d.trades.total }, [['Date', 'date'], ['Type', 'text'], ['Lot ID', 'text', { label: 'Lot', hide: 1 }], ['Shares', 'qty', { hide: 1 }], ['Price', 'money2', { hide: 1 }], ['Fees', 'money2', { hide: 1 }], ['Tax Withheld', 'money2', { label: 'Tax', hide: 1 }], ['Net Amount', 'signed', { label: 'Net' }], ['Realized', 'signed'], ['Notes', 'text', { hide: 1 }]], f)) : ''}
     ${d.espp.rows.length ? invMore('k-espp', 'ESPP contributions', invTable({ rows: newestFirst(d.espp.rows, 'Date'), total: d.espp.total }, [['Date', 'date'], ['Offering ID', 'text', { label: 'Offering', hide: 1 }], ['Gross Salary', 'qty', { hide: 1 }], ['Contribution', 'qty'], ['Amount (USD)', 'money2', { label: 'USD' }]], f)) : ''}
+    ${sndkPay(d.payroll)}
     ${d.perf.rows.some(r => r['End Value'] != null) ? invMore('k-perf', 'Monthly performance', invTable({ rows: perfRows(d.perf) }, [['Date', 'month', { label: 'Month' }], ['Cash In', 'signed', { hide: 1 }], ['End Value', 'money'], ['Return', 'signed'], ['Return %', 'pct']], f)) : ''}`;
 }
 
@@ -3630,7 +3745,7 @@ function bindPDUI() {
     if (e.target.matches && e.target.querySelector('[data-pill]')) P.illOpen = e.target.open;
   }, true);
   $('#pdBody').addEventListener('click', e => {
-    const a = e.target.closest('[data-pprop],[data-psched],[data-pill],[data-prtype],[data-pinv],[data-phold],[data-pstk],[data-pfnd],[data-acclass],[data-acsort],[data-acowner]'); if (!a) return;
+    const a = e.target.closest('[data-pprop],[data-psched],[data-pill],[data-prtype],[data-pinv],[data-phold],[data-pstk],[data-pfnd],[data-acclass],[data-acsort],[data-acowner],[data-snview]'); if (!a) return;
     const y = scrollY;
     if (a.dataset.pinv) { P.inv = a.dataset.pinv; P.hold = ''; renderPD(); return scrollTo(0, 0); }
     if (a.dataset.phold !== undefined) P.hold = a.dataset.phold;
@@ -3643,6 +3758,7 @@ function bindPDUI() {
     if (a.dataset.psched) P.sched = a.dataset.psched;
     if (a.dataset.pill !== undefined) { P.ill = +a.dataset.pill; P.illOpen = true; }
     if (a.dataset.prtype !== undefined) P.rtype = a.dataset.prtype;
+    if (a.dataset.snview) P.snView = a.dataset.snview;
     renderPD(); scrollTo(0, y);
   });
   $('#pdBody').addEventListener('change', e => {
