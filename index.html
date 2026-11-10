@@ -3496,10 +3496,42 @@ function sndkHold(d) {
     </div>
   </div>`;
 }
+// Pay period as dates only: "Period ending 31-Oct-2026" becomes "16–31 Oct 2026" (starting the day after the previous
+// payslip's period), or just "30 Sep 2026" when there is nothing earlier to start from. Two dates in the text make a range.
+const MON3 = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+function periodDates(v) {
+  if (typeof v === 'number') return [serialDate(v)];
+  const out = [], str = String(v || '');
+  for (const m of str.matchAll(/(\d{1,2})[-\/ ]([A-Za-z]{3,9}|\d{1,2})[-\/ ,]*(\d{4})/g)) {
+    const mo = /\d/.test(m[2]) ? +m[2] - 1 : MON3.indexOf(m[2].slice(0, 3).toLowerCase());
+    if (mo >= 0) out.push(new Date(Date.UTC(+m[3], mo, +m[1])));
+  }
+  return out;
+}
+function periodRange(a, b) {
+  const o = { timeZone: 'UTC' }, d = x => x.toLocaleDateString('en-GB', { ...o, day: 'numeric' }), mo = x => MON3[x.getUTCMonth()][0].toUpperCase() + MON3[x.getUTCMonth()].slice(1), y = x => x.getUTCFullYear();
+  if (!a) return `${d(b)} ${mo(b)} ${y(b)}`;
+  if (y(a) !== y(b)) return `${d(a)} ${mo(a)} ${y(a)} – ${d(b)} ${mo(b)} ${y(b)}`;
+  if (mo(a) !== mo(b)) return `${d(a)} ${mo(a)} – ${d(b)} ${mo(b)} ${y(b)}`;
+  return `${d(a)}–${d(b)} ${mo(b)} ${y(b)}`;
+}
+function payPeriods(rows) {
+  const sorted = [...rows].sort((a, b) => (a['Pay Date'] || 0) - (b['Pay Date'] || 0));
+  let prevEnd = null;
+  const map = new Map();
+  for (const r of sorted) {
+    const ds = periodDates(r['Pay Period']);
+    if (!ds.length) { map.set(r, r['Pay Period']); continue; }
+    const end = ds[ds.length - 1], start = ds.length > 1 ? ds[0] : prevEnd ? new Date(prevEnd.getTime() + 864e5) : null;
+    map.set(r, start && start <= end ? periodRange(start, end) : periodRange(null, end));
+    prevEnd = end;
+  }
+  return rows.map(r => ({ ...r, 'Pay Period': map.get(r) }));
+}
 // Salary & Payroll (payslips), in the payslip currency (MYR). Rows with no pay yet are the template's future dates.
 function sndkPay(t) {
   if (!t || !t.rows) return '';
-  const rows = t.rows.filter(r => (r['Gross Pay'] || 0) > 0);
+  const rows = payPeriods(t.rows.filter(r => (r['Gross Pay'] || 0) > 0));
   if (!rows.length) return '';
   const cur = rows[rows.length - 1].Currency || 'MYR', sym = cur === 'MYR' ? 'RM' : cur + ' ';
   const m = (n, dp = 0) => (n < 0 ? '−' : '') + sym + money(Math.abs(n), dp);
