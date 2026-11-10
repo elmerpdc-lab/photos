@@ -3497,7 +3497,8 @@ function sndkHold(d) {
   </div>`;
 }
 // Pay period as dates only: "Period ending 31-Oct-2026" becomes "16–31 Oct 2026" (starting the day after the previous
-// payslip's period), or just "30 Sep 2026" when there is nothing earlier to start from. Two dates in the text make a range.
+// payslip's period). The first payslip starts from the units of basic pay in its note ("Basic 3 units" ending 30 Sep is
+// 28–30 Sep), or shows its end date alone. Two dates in the text make a range.
 const MON3 = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 function periodDates(v) {
   if (typeof v === 'number') return [serialDate(v)];
@@ -3522,7 +3523,9 @@ function payPeriods(rows) {
   for (const r of sorted) {
     const ds = periodDates(r['Pay Period']);
     if (!ds.length) { map.set(r, r['Pay Period']); continue; }
-    const end = ds[ds.length - 1], start = ds.length > 1 ? ds[0] : prevEnd ? new Date(prevEnd.getTime() + 864e5) : null;
+    // With no earlier payslip, the note's "Basic N units" (one unit a day) gives the start
+    const units = +((String(r.Notes || '').match(/basic\s+(\d+)\s+units?/i) || [])[1] || 0);
+    const end = ds[ds.length - 1], start = ds.length > 1 ? ds[0] : prevEnd ? new Date(prevEnd.getTime() + 864e5) : units ? new Date(end.getTime() - (units - 1) * 864e5) : null;
     map.set(r, start && start <= end ? periodRange(start, end) : periodRange(null, end));
     prevEnd = end;
   }
