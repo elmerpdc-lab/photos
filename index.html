@@ -2823,7 +2823,7 @@ function bindBudgetUI() {
    in this page or on GitHub). Read-only: it shows the values Excel last saved. Sections are found by their
    labels, so added rows don't break anything. Downloaded only when the file has changed.
    ===================================================================== */
-const PD_TABS = ['props', 'ins', 'rwd', 'inv', 'acct', 'sndk', 'nwp'], PD_V = 13;   // bump PD_V when parsePD changes, so saved copies are re-read
+const PD_TABS = ['props', 'ins', 'rwd', 'inv', 'acct', 'sndk', 'nwp'], PD_V = 14;   // bump PD_V when parsePD changes, so saved copies are re-read
 const P = { data: null, eTag: '', saved: '', checked: 0, root: null, busy: false, prop: 'overview', sched: 'next', q: '', rtype: '', rall: false, ill: 0, inv: 'usd', hold: '', pstk: '', pfnd: '', acOwner: '', acClass: '', acZero: false, acSort: { k: 'Peso Value', d: -1 }, open: {} };
 // Always owner only, whatever config.js says; family members never receive these sheets
 const OWNER_TABS = ['sndk', 'nwp'];
@@ -2931,7 +2931,7 @@ function parseAccounts(wb) {
   const a = pdGrid(wb, 'accounts'), i = rowOf(a, 0, 'ACCOUNTS DETAILS');
   const h = i < 0 ? -1 : a.findIndex((r, n) => n >= i && r && clean(r[0]) === 'Asset Class');
   if (h < 0) return [];
-  const owner = CFG.personalFile.accountsOwner, keep = ['Account Owner', 'Asset Class', 'Subclass', 'Institution', 'Account Type', 'Purpose', 'Currency', 'Current Amount', 'Peso Value'];
+  const owner = CFG.personalFile.accountsOwner, keep = ['Account Owner', 'Asset Class', 'Subclass', 'Institution', 'Account Type', 'Purpose', 'Currency', 'Current Amount', 'Peso Value', 'Previous Amount', 'Net Flow', 'Gross Return', 'Net Return'];
   // Only the dashboard owner gets other people's accounts (Ellie, Evan); family members never receive those rows
   return pdObjs(pdTable(a, h, 0)).rows.filter(r => OWNER ? r['Account Owner'] && r['Account Owner'] !== 'Total' : r['Account Owner'] === owner).map(r => {
     const o = {};
@@ -3445,11 +3445,54 @@ function renderAcct() {
     </div>`;
 }
 
+// Malaysia: the EPF (KWSP) retirement fund, in MYR. The balance and dividend rate come from the Accounts sheet (everyone who
+// sees this tab); contributions by payslip (sndk) and the projected balance (nwp) are owner-only sheets, so only you see those.
+function invMY() {
+  const rm = (n, dp = 0) => (n < 0 ? '−RM' : 'RM') + money(Math.abs(n), dp), mine = CFG.personalFile.accountsOwner;
+  const epf = (P.data.acct || []).filter(r => /\b(EPF|KWSP)\b/i.test(`${r.Institution || ''} ${r['Account Type'] || ''}`) && (!mine || r['Account Owner'] === mine));
+  if (!epf.length) return pdEmpty('No EPF account in the Accounts sheet yet.');
+  const bal = epf.reduce((x, r) => x + (r['Current Amount'] || 0), 0), php = epf.reduce((x, r) => x + (r['Peso Value'] || 0), 0);
+  const rate = epf[0]['Net Return'] ?? epf[0]['Gross Return'], flow = epf.reduce((x, r) => x + (r['Net Flow'] || 0), 0);
+  // Owner only: contributions from the payslips
+  const pay = OWNER && P.data.sndk && P.data.sndk.payroll ? P.data.sndk.payroll.rows.filter(r => (r['Gross Pay'] || 0) > 0) : [];
+  const cRows = [...pay].sort((a, b) => (a['Pay Date'] || 0) - (b['Pay Date'] || 0));
+  let run = 0;
+  const contrib = cRows.map(r => { const you = r['EPF (Employee)'] || 0, co = r['EPF (Employer)'] || 0; run += you + co; return { 'Pay Date': r['Pay Date'], You: you, Employer: co, Total: you + co, 'Running Total': run }; });
+  const cYou = contrib.reduce((x, r) => x + r.You, 0), cCo = contrib.reduce((x, r) => x + r.Employer, 0);
+  // Owner only: projected balance from the Net Worth plan (in pesos there; shown in MYR at the plan's MYR/PHP rate)
+  const nw = OWNER ? P.data.nwp : null, proj = [];
+  let retire = null;
+  if (nw && nw.years && nw.years.length) {
+    const key = Object.keys(nw.series).find(k => /^Memo: EPF balance/i.test(k)), yrs = nw.series[Object.keys(nw.series).find(k => k.startsWith('Years from base'))] || [];
+    const items = nw.assumptions.flatMap(a => a.items), fxI = items.find(x => /^MYR\s*\/\s*PHP/i.test(x.label)) || {};
+    const fx0 = typeof fxI.v === 'number' ? fxI.v : null, drift = typeof fxI.memo === 'number' ? fxI.memo : 0;
+    const lastWork = (items.find(x => x.label.startsWith('Last working year')) || {}).v;
+    if (key) nw.years.forEach((y, i) => {
+      const v = nw.series[key][i];
+      if (v == null) return;
+      const fx = fx0 ? fx0 * (1 + drift) ** (yrs[i] ?? i) : null;
+      proj.push({ Year: y, PHP: v, MYR: fx ? v / fx : null, retire: y === lastWork });
+    });
+    retire = proj.find(r => r.retire) || null;
+  }
+  return `
+    <div class="b-kpis">
+      ${kpi('EPF Balance', rm(bal), phpFmt(php))}
+      ${typeof rate === 'number' ? kpi('Dividend Rate', +(rate * 100).toFixed(2) + '%', `About ${rm(bal * rate)} a year at today's balance`) : ''}
+      ${contrib.length ? kpi('Contributed So Far', rm(cYou + cCo), `You ${rm(cYou)}, employer ${rm(cCo)}`) : kpi('Added This Month', plus(flow, rm))}
+      ${retire && retire.MYR != null ? kpi(`At Retirement (${retire.Year})`, rm(retire.MYR), `${phpM(retire.PHP)}, from the Net Worth plan`) : ''}
+    </div>
+    <div class="b-card"><h3>EPF Account</h3>${invTable({ rows: epf }, [['Institution', 'text', { label: 'Fund' }], ['Account Type', 'text', { label: 'Type', hide: 1 }], ['Purpose', 'text', { hide: 1 }], ['Current Amount', 'money2', { label: 'Balance' }], ['Previous Amount', 'money2', { label: 'Last month', hide: 1 }], ['Net Flow', 'signed', { label: 'Added' }], ['Net Return', 'pct', { label: 'Dividend', hide: 1 }]], rm)}</div>
+    ${contrib.length ? `<div class="b-card"><h3>Contributions by Payslip</h3>${invTable({ rows: [...contrib].reverse(), total: { 'Pay Date': 'Total', You: cYou, Employer: cCo, Total: cYou + cCo } }, [['Pay Date', 'date', { label: 'Paid' }], ['You', 'money2'], ['Employer', 'money2'], ['Total', 'money2'], ['Running Total', 'money2', { hide: 1 }]], rm)}
+      <div class="nw-yn">From the payslips in the Sandisk sheet. Only you see this.</div></div>` : ''}
+    ${proj.length ? invMore('my-proj', 'Projected EPF Balance', `<div class="b-scroll"><table class="b-t"><thead><tr><th>Year</th><th class="r">MYR</th><th class="r">Pesos</th></tr></thead><tbody>${proj.map(r => `<tr class="${r.retire ? 'pd-next' : ''}"><td>${r.Year}${r.retire ? ' (retire)' : ''}</td><td class="r">${r.MYR == null ? '' : rm(r.MYR)}</td><td class="r">${phpM(r.PHP)}</td></tr>`).join('')}</tbody></table></div>
+      <div class="nw-yn">Year-end, from the Net Worth plan; MYR at the plan's MYR/PHP rate. Only you see this.</div>`) : ''}`;
+}
 function renderInv() {
-  const tabs = [['usd', 'US / Global'], ['php', 'Philippines'], ['sgd', 'Singapore']], d = P.data.inv;
+  const tabs = [['usd', 'US / Global'], ['php', 'Philippines'], ['sgd', 'Singapore'], ['my', 'Malaysia']], d = P.data.inv;
   if (!tabs.some(t => t[0] === P.inv)) P.inv = 'usd';
   return `    <div class="b-months" role="group" aria-label="Portfolio">${tabs.map(([k, l]) => `<button data-pinv="${k}" class="${P.inv === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-    ${P.inv === 'usd' ? invUSD(d.usd) : P.inv === 'php' ? invPHP(d.php) : invSGD(d.sgd)}`;
+    ${P.inv === 'usd' ? invUSD(d.usd) : P.inv === 'php' ? invPHP(d.php) : P.inv === 'my' ? invMY() : invSGD(d.sgd)}`;
 }
 
 const pdEmpty = t => `<div class="b-card"><p class="b-sub" style="margin:0">${esc(t)}</p></div>`;
