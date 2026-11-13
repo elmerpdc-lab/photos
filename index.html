@@ -3384,14 +3384,11 @@ function invPHP(d) {
   };
   const accts = [...a.rows].sort((x, y) => (x.Status === 'Active' ? 0 : 1) - (y.Status === 'Active' ? 0 : 1));
   // Net liquidity: stocks and funds, plus MP2 and Pag-IBIG / SSS (in your view, Ellie's and Evan's too)
-  const pf = phFunds(), mine = CFG.personalFile.accountsOwner, sumA = l => l.reduce((x, r) => x + (r['Current Amount'] || 0), 0);
-  const brok = t['Net Liquidity'] || 0, mp2T = sumA(pf.mp2), retT = sumA(pf.ret), all = [...pf.mp2, ...pf.ret];
-  const others = [...new Set(all.map(r => r['Account Owner']).filter(o => o && o !== mine))];
-  const nlNote = [`Stocks and funds ${f(brok)}`, mp2T ? `MP2 ${f(mp2T)}` : '', retT ? `Pag-IBIG and SSS ${f(retT)}` : ''].filter(Boolean).join(', ')
-    + (others.length ? `. Includes ${others.map(o => `${esc(o)} ${f(sumA(all.filter(r => r['Account Owner'] === o)))}`).join(', ')}` : '');
+  const pf = phFunds(), sumA = l => l.reduce((x, r) => x + (r['Current Amount'] || 0), 0);
+  const brok = t['Net Liquidity'] || 0, mp2T = sumA(pf.mp2), retT = sumA(pf.ret);
   return `
     <div class="b-kpis">
-      ${kpi('Net liquidity', f(brok + mp2T + retT), mp2T || retT ? nlNote : '')}
+      ${kpi('Net liquidity', f(brok + mp2T + retT))}
       ${kpi('Capital', f(t.Capital || 0))}
       ${kpi('Unrealized', plus(t.Unrealized || 0, f))}
       ${kpi('Realized', plus(t.Realized || 0, f), `Trading ${f(t['Trading Profit'] || 0)}, dividends ${f(t.Dividends || 0)}`)}
