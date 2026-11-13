@@ -3326,6 +3326,42 @@ function invUSD(d) {
     ${invMore('u-int', 'Interest', invTable({ rows: newestFirst(d.interests.rows, 'Date') }, [['Date', 'date'], ['AccountFromIB', 'text', { label: 'Account', hide: 1 }], ['Description', 'text', { hide: 1 }], ['Amount', 'money2', { hide: 1 }], ['Net', 'money2']], f))}`;
 }
 
+// Pag-IBIG MP2 and the Philippine retirement funds (regular Pag-IBIG, SSS), from the Accounts sheet. Family browsers only
+// receive your accounts; in your view the MP2 totals include Ellie's and Evan's, and the Net Worth plan's MP2 line is added.
+function phRetire() {
+  const mine = CFG.personalFile.accountsOwner, A = (P.data.acct || []).filter(r => r.Currency === 'PHP' || r.Currency == null);
+  const isMp2 = r => /\bMP2\b/i.test(r.Institution || ''), isRet = r => !isMp2(r) && /^(Pag[- ]?ibig|SSS)\b/i.test(r.Institution || '') && /retire|mandatory|regular/i.test(r['Account Type'] || '');
+  const mp2 = A.filter(isMp2).filter(r => Math.abs(r['Current Amount']) >= 0.5), ret = A.filter(isRet).filter(r => Math.abs(r['Current Amount']) >= 0.5);
+  if (!mp2.length && !ret.length) return '';
+  const sum = list => list.reduce((x, r) => x + (r['Current Amount'] || 0), 0);
+  const mineMp2 = mp2.filter(r => r['Account Owner'] === mine), others = mp2.filter(r => r['Account Owner'] !== mine);
+  const total = sum(mp2), rate = (mp2[0] || {})['Net Return'] ?? (mp2[0] || {})['Gross Return'];
+  const byOwner = [...new Set(others.map(r => r['Account Owner']))].map(o => `${esc(o)} ${phpFmt(sum(others.filter(r => r['Account Owner'] === o)))}`);
+  const label = r => String(r.Institution || '').replace(/\s*\((?:\d[\d ]*|[A-Za-z]+)\)\s*$/, '');
+  const rows = [...mp2].sort((a, b) => (a['Account Owner'] === mine ? 0 : 1) - (b['Account Owner'] === mine ? 0 : 1) || b['Current Amount'] - a['Current Amount'])
+    .map(r => ({ Account: label(r), Owner: r['Account Owner'], Balance: r['Current Amount'], Dividend: r['Net Return'] ?? r['Gross Return'], 'A Year': (r['Current Amount'] || 0) * ((r['Net Return'] ?? r['Gross Return']) || 0) }));
+  const retRows = ret.sort((a, b) => b['Current Amount'] - a['Current Amount'])
+    .map(r => ({ Fund: r.Institution, Type: r['Account Type'], Owner: r['Account Owner'], Balance: r['Current Amount'], Dividend: r['Net Return'] ?? r['Gross Return'] }));
+  const cols = [['Account', 'text'], ...(others.length ? [['Owner', 'text']] : []), ['Balance', 'money'], ['Dividend', 'pct', { hide: 1 }], ['A Year', 'money', { label: 'Dividend a year' }]];
+  // Owner only: MP2 in the Net Worth plan (savings, and what is drawn for the house build)
+  let plan = '';
+  const nw = OWNER ? P.data.nwp : null;
+  if (nw && nw.years && nw.years.length) {
+    const k = p => Object.keys(nw.series).find(x => x.startsWith(p)), sv = nw.series[k('MP2 savings')] || [], dr = nw.series[k('House build balance drawn from MP2')] || [];
+    if (sv.some(v => v != null)) plan = invMore('p-mp2plan', 'MP2 in the Net Worth Plan', `<div class="b-scroll"><table class="b-t"><thead><tr><th>Year</th><th class="r">MP2 savings</th>${dr.some(v => v) ? '<th class="r">Drawn for house build</th>' : ''}</tr></thead><tbody>${nw.years.map((y, i) => `<tr><td>${y}</td><td class="r">${phpM(sv[i])}</td>${dr.some(v => v) ? `<td class="r">${dr[i] ? phpM(Math.abs(dr[i])) : ''}</td>` : ''}</tr>`).join('')}</tbody></table></div>
+      <div class="nw-yn">Year-end, from the Net Worth plan. Only you see this.</div>`);
+  }
+  return `<div class="b-card"><h3>Pag-IBIG MP2 and Retirement</h3>
+    <div class="b-kpis sn-pay">
+      ${kpi('MP2 Balance', phpFmt(total), others.length ? `Yours ${phpFmt(sum(mineMp2))}, ${byOwner.join(', ')}` : `${mp2.length} account${mp2.length === 1 ? '' : 's'}`)}
+      ${typeof rate === 'number' ? kpi('MP2 Dividend Rate', +(rate * 100).toFixed(2) + '%', `About ${phpFmt(rows.reduce((x, r) => x + r['A Year'], 0))} a year`) : ''}
+      ${ret.length ? kpi('Pag-IBIG and SSS', phpFmt(sum(ret)), ret.map(r => `${esc(r.Institution)}${r['Account Owner'] !== mine ? ' (' + esc(r['Account Owner']) + ')' : ''} ${phpFmt(r['Current Amount'])}`).join(', ')) : ''}
+    </div>
+    ${mp2.length ? invTable({ rows, total: { Account: 'Total', Balance: total, 'A Year': rows.reduce((x, r) => x + r['A Year'], 0) } }, cols, phpFmt) : ''}
+    ${ret.length ? `<h3 class="nw-h" style="margin-top:16px">Retirement Funds</h3>${invTable({ rows: retRows }, [['Fund', 'text'], ['Type', 'text', { hide: 1 }], ...(retRows.some(r => r.Owner !== mine) ? [['Owner', 'text']] : []), ['Balance', 'money'], ['Dividend', 'pct', { hide: 1 }]], phpFmt)}` : ''}
+    ${plan}
+  </div>`;
+}
 function invPHP(d) {
   const a = d.accounts, t = a.total || {}, f = phpFmt, keys = ['Ticker', 'Account', 'Action', 'Code', 'Fund Name'];
   // Sub-tabs per account, like the US holdings
@@ -3356,6 +3392,7 @@ function invPHP(d) {
     <div class="pd-facts">${metricCard(d.metrics)}</div>
     <div class="b-card"><h3>Stocks</h3>${chips('data-pstk', P.pstk, stockAccts)}${invTable({ rows: stocks, total: totalOf(stocks, ['Value', 'Unrealized', 'Day Change', 'Target ₱', 'Buy/(Sell) ₱'], { Ticker: `${fmtN(stocks.length)} position${stocks.length === 1 ? '' : 's'}` }) }, [['Ticker', 'text'], ['Account', 'text', { hide: 1 }], ['Price', 'price'], ['Change', 'pct', { hide: 1 }], ['Ave Price', 'price', { label: 'Average', hide: 1 }], ['Holdings', 'qty', { label: 'Shares' }], ['Value', 'money'], ['Unrealized', 'signed'], ['Unrealized %', 'pct', { hide: 1 }], ['Day Change', 'signed', { hide: 1 }], ['Action', 'text', { hide: 1 }], ['Target ₱', 'money', { label: 'Target', hide: 1 }], ['Buy/(Sell) ₱', 'signed', { label: 'Buy / (sell)', hide: 1 }], ['Div Yield', 'pct', { hide: 1 }], ['Ex-Date', 'date', { hide: 1 }]], f)}</div>
     <div class="b-card"><h3>Funds</h3>${chips('data-pfnd', P.pfnd, fundAccts)}${invTable({ rows: funds, total: totalOf(funds, ['Value', 'Unrealized', 'Target', 'Buy/Sell'], { 'Fund Name': `${fmtN(funds.length)} fund${funds.length === 1 ? '' : 's'}` }) }, [['Fund Name', 'text', { label: 'Fund' }], ['Account', 'text', { hide: 1 }], ['Price', 'price', { hide: 1 }], ['Average Price', 'price', { label: 'Average', hide: 1 }], ['Holdings', 'qty', { hide: 1 }], ['Value', 'money'], ['Unrealized', 'signed'], ['Unrealized %', 'pct', { hide: 1 }], ['Target', 'money', { hide: 1 }], ['Buy/Sell', 'signed', { label: 'Buy / (sell)', hide: 1 }], ['Yield', 'pct', { hide: 1 }]], f)}</div>
+    ${phRetire()}
     ${d.strategy ? invMore('p-strat', 'Dividend strategy', invTable(d.strategy, [['Account', 'text'], ['Capital', 'money'], ['Annual Income', 'money'], ['Yearly Add-on', 'money', { hide: 1 }], ['Future Value', 'money', { hide: 1 }], ['Future Income', 'money', { hide: 1 }], ['Future Monthly', 'money']], f)) : ''}
     ${invMore('p-perf', 'Monthly performance', invTable({ rows: perfRows(d.perf) }, [['Date', 'month', { label: 'Month' }], ['Cash In', 'signed', { hide: 1 }], ['End Value', 'money'], ['Return', 'signed'], ['Return %', 'pct'], ['Realized', 'signed', { hide: 1 }]], f))}
     ${invMore('p-st', 'Stock trades', invTable({ rows: newestFirst(d.stockTrades.rows, 'Date') }, [['Date', 'date'], ['Symbol', 'text'], ['Account', 'text', { hide: 1 }], ['Type', 'text'], ['Units', 'qty', { hide: 1 }], ['Transaction Price', 'price', { label: 'Price', hide: 1 }], ['Transaction Amount', 'money', { label: 'Amount' }], ['Gross Charges', 'money2', { label: 'Charges', hide: 1 }], ['Realized', 'signed', { hide: 1 }]], f))}
