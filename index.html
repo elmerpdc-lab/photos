@@ -248,6 +248,8 @@ body.building #photosLayout > aside, body.building #photosLayout > main > :not(#
 .b-head { margin-bottom: 12px; }
 .b-head h2 { margin: 0; font-size: 22px; }
 .b-sub { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.b-local { margin-left: 6px; padding: 4px 12px; border: 1px solid var(--accent); border-radius: 999px; background: transparent; color: var(--accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.b-local:hover { background: var(--accent-soft); }
 .b-state { margin: 14px 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); font-size: 14px; }
 .b-months { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0; }
 .b-months button { padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
@@ -2647,6 +2649,33 @@ async function readBudgetWorkbook(url) {
   return parseBudget(XLSX.read(await r.arrayBuffer(), { type: 'array' }));
 }
 
+// Owner only: when OneDrive can't send a workbook (an outage, say), offer to read the copy on this computer instead.
+// It is saved like a download, with no OneDrive version, so the next check goes back to OneDrive as soon as that works.
+function offerLocalFile(state, name, use) {
+  if (!OWNER || DEMO) return;
+  const b = document.createElement('button');
+  b.type = 'button'; b.className = 'b-local'; b.textContent = 'Use a file from this computer';
+  b.onclick = () => {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = '.xlsx,.xlsm';
+    inp.onchange = async () => {
+      const f = inp.files && inp.files[0];
+      if (!f) return;
+      state.textContent = `Reading ${f.name}…`;
+      try {
+        await use(f);
+        const when = new Date(f.lastModified).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+        state.textContent = `Showing ${f.name} from this computer (saved ${when})${f.name !== name ? `, not ${name}` : ''}. The dashboard goes back to OneDrive when it works again.`;
+      } catch (e) {
+        console.warn('Local file', e);
+        state.textContent = `Couldn't read ${f.name}: ${e.message}`;
+        offerLocalFile(state, name, use);
+      }
+    };
+    inp.click();
+  };
+  state.append(' ', b);
+}
 async function loadBudget(force = false) {
   if (B.busy) return;
   const state = $('#bState'), btn = $('#btnRefresh'), cfg = CFG.budgetFile;
@@ -2678,6 +2707,13 @@ async function loadBudget(force = false) {
     say((e.status === 404 ? `Couldn't find ${cfg.path} inside ${cfg.folder}. It may have been moved or renamed.`
       : e.status === 403 ? "This account doesn't have access to the expense tracker."
       : "Couldn't update the expense tracker: " + e.message) + (B.data ? ' Showing the last saved copy.' : ''));
+    if (e.status !== 403) offerLocalFile(state, cfg.path.split('/').pop(), async f => {
+      const url = URL.createObjectURL(f);
+      try { B.data = await readBudgetWorkbook(url); } finally { URL.revokeObjectURL(url); }
+      B.eTag = null; B.saved = new Date(f.lastModified).toISOString(); B.checked = 0;
+      await idb.set('budget1:' + cfg.path, { data: B.data, eTag: null, saved: B.saved, checked: 0, root: B.root });
+      renderBudget();
+    });
   } finally { B.busy = false; btn.classList.remove('spin'); }
 }
 
@@ -3103,6 +3139,13 @@ async function loadPD(force = false) {
     say((e.status === 404 ? `Couldn't find ${cfg.path} inside ${cfg.folder}. It may have been moved or renamed.`
       : e.status === 403 ? "This account doesn't have access to that workbook."
       : "Couldn't update from the workbook: " + e.message) + (P.data ? ' Showing the last saved copy.' : ''));
+    if (e.status !== 403) offerLocalFile(state, cfg.path.split('/').pop(), async f => {
+      if (!window.XLSX) await loadJs(CDNJS + 'xlsx/0.18.5/xlsx.full.min.js');
+      P.data = parsePD(XLSX.read(await f.arrayBuffer(), { type: 'array', sheets: pdSheets() }));
+      P.eTag = null; P.saved = new Date(f.lastModified).toISOString(); P.checked = 0;
+      await idb.set('pd1:' + (OWNER ? 'owner:' : '') + cfg.path, { data: P.data, eTag: null, saved: P.saved, checked: 0, root: P.root });
+      renderPD();
+    });
   } finally { P.busy = false; btn.classList.remove('spin'); }
 }
 
