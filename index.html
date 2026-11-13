@@ -3328,10 +3328,13 @@ function invUSD(d) {
 
 // Pag-IBIG MP2 and the Philippine retirement funds (regular Pag-IBIG, SSS), from the Accounts sheet. Family browsers only
 // receive your accounts; in your view the MP2 totals include Ellie's and Evan's, and the Net Worth plan's MP2 line is added.
-function phRetire() {
-  const mine = CFG.personalFile.accountsOwner, A = (P.data.acct || []).filter(r => r.Currency === 'PHP' || r.Currency == null);
+function phFunds() {
+  const A = (P.data.acct || []).filter(r => r.Currency === 'PHP' || r.Currency == null);
   const isMp2 = r => /\bMP2\b/i.test(r.Institution || ''), isRet = r => !isMp2(r) && /^(Pag[- ]?ibig|SSS)\b/i.test(r.Institution || '') && /retire|mandatory|regular/i.test(r['Account Type'] || '');
-  const mp2 = A.filter(isMp2).filter(r => Math.abs(r['Current Amount']) >= 0.5), ret = A.filter(isRet).filter(r => Math.abs(r['Current Amount']) >= 0.5);
+  return { mp2: A.filter(isMp2).filter(r => Math.abs(r['Current Amount']) >= 0.5), ret: A.filter(isRet).filter(r => Math.abs(r['Current Amount']) >= 0.5) };
+}
+function phRetire() {
+  const mine = CFG.personalFile.accountsOwner, { mp2, ret } = phFunds();
   if (!mp2.length && !ret.length) return '';
   const sum = list => list.reduce((x, r) => x + (r['Current Amount'] || 0), 0);
   const mineMp2 = mp2.filter(r => r['Account Owner'] === mine), others = mp2.filter(r => r['Account Owner'] !== mine);
@@ -3380,9 +3383,15 @@ function invPHP(d) {
     return o;
   };
   const accts = [...a.rows].sort((x, y) => (x.Status === 'Active' ? 0 : 1) - (y.Status === 'Active' ? 0 : 1));
+  // Net liquidity: stocks and funds, plus MP2 and Pag-IBIG / SSS (in your view, Ellie's and Evan's too)
+  const pf = phFunds(), mine = CFG.personalFile.accountsOwner, sumA = l => l.reduce((x, r) => x + (r['Current Amount'] || 0), 0);
+  const brok = t['Net Liquidity'] || 0, mp2T = sumA(pf.mp2), retT = sumA(pf.ret), all = [...pf.mp2, ...pf.ret];
+  const others = [...new Set(all.map(r => r['Account Owner']).filter(o => o && o !== mine))];
+  const nlNote = [`Stocks and funds ${f(brok)}`, mp2T ? `MP2 ${f(mp2T)}` : '', retT ? `Pag-IBIG and SSS ${f(retT)}` : ''].filter(Boolean).join(', ')
+    + (others.length ? `. Includes ${others.map(o => `${esc(o)} ${f(sumA(all.filter(r => r['Account Owner'] === o)))}`).join(', ')}` : '');
   return `
     <div class="b-kpis">
-      ${kpi('Net liquidity', f(t['Net Liquidity'] || 0))}
+      ${kpi('Net liquidity', f(brok + mp2T + retT), mp2T || retT ? nlNote : '')}
       ${kpi('Capital', f(t.Capital || 0))}
       ${kpi('Unrealized', plus(t.Unrealized || 0, f))}
       ${kpi('Realized', plus(t.Realized || 0, f), `Trading ${f(t['Trading Profit'] || 0)}, dividends ${f(t.Dividends || 0)}`)}
