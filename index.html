@@ -2600,6 +2600,7 @@ const money = (n, dp = 0) => (n == null || isNaN(n) ? '' : (+n).toLocaleString('
 const serialDate = n => new Date(Math.round((n - 25569) * 864e5));
 const ymOf = n => (typeof n === 'number' ? serialDate(n).toISOString().slice(0, 7) : '');
 const ymLabel = ym => { const [y, m] = ym.split('-'); return MONTHS[+m - 1] + ' ' + y; };
+const ymShort = ym => { const [y, m] = ym.split('-'); return MONTHS[+m - 1].slice(0, 3) + " '" + y.slice(2); };
 
 function writeBudgetHash() {
   const h = new URLSearchParams({ tab: 'budget' });
@@ -2757,6 +2758,46 @@ function titleCaseIn(root) {
   const el = document.querySelector(sel);
   if (el) new MutationObserver(() => titleCaseIn(el)).observe(el, { childList: true, subtree: true });
 });
+// Budget charts: this month by category (tap to filter the transactions), and every month's spending by category
+// against the monthly average (tap a month to open it). Amounts in MYR.
+function budgetCharts(d, months, rowsC) {
+  const rmF = (n, dp = 0) => (n < 0 ? '−RM' : 'RM') + money(Math.abs(n), dp);
+  const order = [...rowsC].sort((a, b) => b.actual - a.actual);
+  const palette = new Map(d.cats.map((c, i) => [c.name, `var(--viz${(i % 6) + 1})`]));
+  const segs = order.filter(c => c.actual > 0).map(c => ({ k: c.name, v: c.actual, c: palette.get(c.name) || 'var(--muted)', attr: `data-bcat="${esc(c.name)}"` }));
+  const donut = donutCard(`Spending in ${ymLabel(B.month)}:`, 'Category', segs, rmF, 'Tap a category to show only its transactions.');
+  // trend: stacked columns by category, largest five categories overall and the rest as Other
+  const withOne = B.trend === 'all', counts = t => t.type !== 'Excluded' && (withOne || t.type !== 'One-off');
+  const spentIn = ym => d.tx.filter(t => t.ym === ym && counts(t));
+  const totals = new Map();
+  for (const t of d.tx) if (counts(t)) totals.set(t.cat, (totals.get(t.cat) || 0) + t.myr);
+  const topCats = [...totals].sort((a, b) => b[1] - a[1]).slice(0, 5).map(x => x[0]);
+  const keys = [...topCats, 'Other'], col = k => (k === 'Other' ? 'var(--muted)' : `var(--viz${topCats.indexOf(k) + 1})`);
+  const data = months.map(ym => { const m = new Map(keys.map(k => [k, 0])); for (const t of spentIn(ym)) { const k = topCats.includes(t.cat) ? t.cat : 'Other'; m.set(k, m.get(k) + t.myr); } return m; });
+  const n = months.length, W = 760, H = 230, L = 52, R = 8, T = 12, BM = 26;
+  const top = Math.max(1, d.avgTotal || 0, ...data.map(m => [...m.values()].reduce((a, v) => a + Math.max(0, v), 0)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * 10 ** Math.floor(Math.log10(top / 4))).find(s => top / s <= 5), max = Math.ceil(top / step) * step;
+  const y = v => T + (H - T - BM) * (1 - v / max), cw = (W - L - R) / Math.max(n, 1), bw = Math.min(36, cw * .6);
+  let svg = '';
+  for (let v = 0; v <= max + 1; v += step) svg += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v ? money(v) : '0'}</text>`;
+  months.forEach((ym, k) => {
+    const cx = L + cw * (k + .5);
+    if (ym === B.month) svg += `<rect x="${L + cw * k}" y="${T}" width="${cw}" height="${H - T - BM}" fill="var(--chip)"/>`;
+    let base = 0;
+    for (const key of keys) { const v = Math.max(0, data[k].get(key)); if (v) { svg += `<rect x="${cx - bw / 2}" width="${bw}" y="${y(base + v)}" height="${y(base) - y(base + v)}" fill="${col(key)}"/>`; base += v; } }
+    svg += `<text x="${cx}" y="${H - 8}" text-anchor="middle">${ymShort(ym)}</text>`;
+    const tip = `${ymLabel(ym)}: ${rmF(base)}. ` + keys.filter(x => data[k].get(x)).map(x => `${x} ${rmF(data[k].get(x))}`).join(', ');
+    svg += `<rect x="${L + cw * k}" y="${T}" width="${cw}" height="${H - T - BM}" fill="transparent" data-bm="${ym}" style="cursor:pointer" data-tip="${esc(tip)}" aria-label="${esc(tip)}"/>`;
+  });
+  if (d.avgTotal) svg += `<line x1="${L}" x2="${W - R}" y1="${y(d.avgTotal)}" y2="${y(d.avgTotal)}" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="6 4"/><text x="${W - R}" y="${y(d.avgTotal) - 5}" text-anchor="end" class="nw-lbl">Monthly avg ${rmF(d.avgTotal)}</text>`;
+  const legend = keys.filter(k => data.some(m => m.get(k))).map(k => `<span><i style="background:${col(k)}"></i>${esc(k)}</span>`).join('');
+  return `${donut}
+    ${n > 1 ? `<div class="b-card"><h3>Spending by Month</h3>
+      <div class="b-months sn-view" role="group" aria-label="Show"><button data-btrend="reg" class="${withOne ? '' : 'on'}">Regular</button><button data-btrend="all" class="${withOne ? 'on' : ''}">With One-Offs</button></div>
+      <div class="b-scroll"><svg class="nw-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Spending by month and category">${svg}</svg></div>
+      <div class="nw-legend">${legend}<span><i class="ln dash"></i>Monthly avg</span></div>
+      <div class="nw-yn">Tap a month to open it. ${withOne ? 'One-offs are included.' : 'One-offs (such as the car) are left out; the monthly avg line is for all spending.'}</div></div>` : ''}`;
+}
 function renderBudget() {
   const d = B.data; if (!d) return;
   const months = [...new Set(d.tx.filter(t => t.type !== 'Excluded' && t.ym).map(t => t.ym))].sort();
@@ -2794,6 +2835,7 @@ function renderBudget() {
       <div class="b-kpi"><div class="l">One-offs, included in actual</div><div class="v">${money(oneT)}</div><div class="n">Without them, actual is ${money(regT)}</div></div>
       ${left ? `<div class="b-kpi"><div class="l">${left.myr < 0 ? 'Monthly shortfall' : 'Monthly left over'} (estimate)</div><div class="v">${money(Math.abs(left.myr))}</div></div>` : ''}
     </div>
+    ${budgetCharts(d, months, rowsC)}
     <div class="b-card">
       <h3>Spending against Monthly avg</h3>
       <p class="note">Bar: actual. Tick: Monthly avg.</p>
@@ -2844,6 +2886,8 @@ function renderBudgetTx() {
 
 function bindBudgetUI() {
   $('#bBody').addEventListener('click', e => {
+    const tb = e.target.closest('[data-btrend]');
+    if (tb) { B.trend = tb.dataset.btrend; const y = scrollY; renderBudget(); return scrollTo(0, y); }
     const m = e.target.closest('[data-bm]');
     if (m) { B.month = m.dataset.bm; return renderBudget(); }
     const c = e.target.closest('[data-bcat]');
@@ -2861,12 +2905,12 @@ function bindBudgetUI() {
    in this page or on GitHub). Read-only: it shows the values Excel last saved. Sections are found by their
    labels, so added rows don't break anything. Downloaded only when the file has changed.
    ===================================================================== */
-const PD_TABS = ['props', 'ins', 'rwd', 'inv', 'acct', 'sndk', 'nwp'], PD_V = 14;   // bump PD_V when parsePD changes, so saved copies are re-read
+const PD_TABS = ['props', 'ins', 'rwd', 'inv', 'acct', 'sndk', 'nwp'], PD_V = 15;   // bump PD_V when parsePD changes, so saved copies are re-read
 const P = { data: null, eTag: '', saved: '', checked: 0, root: null, busy: false, prop: 'overview', sched: 'next', q: '', rtype: '', rall: false, ill: 0, inv: 'usd', hold: '', pstk: '', pfnd: '', acOwner: '', acClass: '', acZero: false, acSort: { k: 'Peso Value', d: -1 }, open: {} };
 // Always owner only, whatever config.js says; family members never receive these sheets
 const OWNER_TABS = ['sndk', 'nwp'];
 const pdAllowed = tab => { const c = CFG.personalFile; return !!c && (OWNER || !(c.ownerOnly || OWNER_TABS.includes(tab) || (c.ownerOnlyTabs || []).includes(tab))) && filesAllowed(); };
-const pdSheets = () => ['real', 'shr', 'upt', 'ser', 'car', 'ins', 'rwd', 'usd', 'php', 'sgd', 'accounts', ...(OWNER ? OWNER_TABS : [])];
+const pdSheets = () => ['real', 'shr', 'upt', 'ser', 'car', 'ins', 'rwd', 'usd', 'php', 'sgd', 'accounts', ...(OWNER ? [...OWNER_TABS, 'exp'] : [])];
 const dayLabel = n => (typeof n === 'number' ? serialDate(n).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '');
 const php = (n, dp = 0) => '₱' + money(n, dp);
 const rm = (n, dp = 0) => 'RM ' + money(n, dp);
@@ -3074,6 +3118,28 @@ function parseNwp(wb) {
   }
   return { ytd, tracker, chartPre, years, phases: iPh >= 0 ? (g[iPh] || []).slice(C, C + n).map(x => (x == null ? '' : String(x))) : [], series, groups, assumptions };
 }
+// exp sheet (owner only): monthly outflows (the "Expenses" block to its Total) and inflows (the rows after it, to
+// "Monthly Total Income"). The USD trading profit row in dollars is skipped; its peso row is used. Months run to this month.
+function parseFlows(wb) {
+  const g = pdGrid(wb, 'exp'), iE = rowOf(g, 0, 'Expenses');
+  if (iE < 0) return null;
+  const head = g[iE] || [], cols = [];
+  const now = new Date(), thisYm = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  head.forEach((v, j) => { if (j && typeof v === 'number' && ymOf(v) <= thisYm) cols.push({ j, ym: ymOf(v) }); });
+  const num = v => (typeof v === 'number' ? v : +String(v ?? '').replace(/,/g, '') || 0);
+  const out = [], inc = [];
+  let i = iE + 1;
+  for (; i < g.length; i++) { const l = clean((g[i] || [])[0]); if (l === 'Total') break; if (typeof l === 'string' && l) out.push({ label: l, v: cols.map(c => num(g[i][c.j])) }); }
+  for (i++; i < g.length; i++) {
+    const l = clean((g[i] || [])[0]);
+    if (typeof l === 'string' && /^Monthly Total Income/i.test(l)) break;
+    if (typeof l === 'string' && l && !/\(\$\)/.test(l)) inc.push({ label: l.replace(/\s*\(P\)\s*$/, ''), v: cols.map(c => num(g[i][c.j])) });
+  }
+  // drop months with nothing in them (template columns)
+  const keep = cols.map((_, k) => out.some(r => r.v[k]) || inc.some(r => r.v[k]));
+  const pick = a => a.filter((_, k) => keep[k]);
+  return { months: pick(cols.map(c => c.ym)), out: out.map(r => ({ ...r, v: pick(r.v) })), inc: inc.map(r => ({ ...r, v: pick(r.v) })) };
+}
 function parsePD(wb) {
   const real = pdGrid(wb, 'real');
   const iP = rowOf(real, 0, 'Name'), iT = rowOf(real, 0, 'Name', iP + 1), iR = rowOf(real, 0, 'Pacific Residences Returns');
@@ -3095,7 +3161,7 @@ function parsePD(wb) {
     car: { vehicles: pdTable(car, iV, 0, 13), loan, schedule: iNo >= 0 ? pdTable(car, iL, iNo, 7) : null },
     ins: { policies: pdTable(ins, iPol, 0, 11), payments: pdTable(ins, iPay, 0, 4), ills },
     rwd: pdTable(rw, iW, 0, 12), inv: parseInv(wb), acct: parseAccounts(wb),
-    ...(OWNER ? { sndk: pdTry(parseSndk, wb), nwp: pdTry(parseNwp, wb) } : {}) };
+    ...(OWNER ? { sndk: pdTry(parseSndk, wb), nwp: pdTry(parseNwp, wb), flows: pdTry(parseFlows, wb) } : {}) };
 }
 
 async function loadPD(force = false) {
@@ -3247,12 +3313,51 @@ function carHTML(d) {
     ${sc ? `<details class="b-card"><summary>Loan schedule</summary>${pdTableHTML(sc, (n) => rm(n, 2), { mark: r => r === next })}</details>` : ''}`;
 }
 
+// A donut and table card, like the Sandisk holdings summary. segs: [{ k, v, c, attr }] where attr makes a row/slice clickable.
+function donutCard(title, head, segs, fmt, note = '', showZero = false) {
+  const list = segs.filter(x => showZero || Math.abs(x.v) >= 0.5), total = list.reduce((a, x) => a + Math.max(0, x.v), 0);
+  if (!total) return '';
+  const R = 70, C = 2 * Math.PI * R, pc = v => (Math.max(0, v) / total * 100).toFixed(2) + '%';
+  let at = 0, ring = `<circle cx="90" cy="90" r="${R}" fill="none" stroke="var(--chip)" stroke-width="22"/>`;
+  for (const x of list) {
+    if (!(x.v > 0)) continue;
+    const len = x.v / total * C;
+    ring += `<circle cx="90" cy="90" r="${R}" fill="none" stroke="${x.c}" stroke-width="22" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-at}" transform="rotate(-90 90 90)"${x.attr ? ` ${x.attr} style="cursor:pointer"` : ''}><title>${esc(x.k)} ${fmt(x.v)}</title></circle>`;
+    at += len;
+  }
+  return `<div class="b-card sn-hold">
+    <h3>${title} ${fmt(total)}</h3>
+    <div class="sn-hold-body">
+      <svg class="sn-donut" viewBox="0 0 180 180" role="img" aria-label="${esc(head)} distribution">${ring}</svg>
+      <div class="b-scroll"><table class="b-t"><thead><tr><th>${esc(head)}</th><th class="r">Allocation</th><th class="r">Value</th></tr></thead><tbody>
+        ${list.map(x => `<tr${x.attr ? ` class="iv-row" ${x.attr}` : ''}><td><i class="sn-sw" style="background:${x.c}"></i>${esc(x.k)}</td><td class="r">${pc(x.v)}</td><td class="r">${fmt(x.v)}</td></tr>`).join('')}
+        <tr class="tot"><td>Total</td><td class="r">100.00%</td><td class="r">${fmt(total)}</td></tr>
+      </tbody></table></div>
+    </div>
+    ${note ? `<div class="nw-yn">${note}</div>` : ''}
+  </div>`;
+}
+// Properties by type, at market value; vehicles at their peso value in the Accounts sheet
+function propsDonut(d) {
+  const t = d.real && d.real.props;
+  if (!t) return '';
+  const c = n => t.head.indexOf(n), num = v => (typeof v === 'number' ? v : +String(v || '').replace(/,/g, '') || 0);
+  const by = new Map();
+  const kind = s => (/condo/i.test(s) ? 'Condo' : /lot/i.test(s) ? 'Lot' : /house/i.test(s) ? 'House' : String(s || 'Other'));
+  for (const r of t.rows) by.set(kind(r[c('Type')]), (by.get(kind(r[c('Type')])) || 0) + num(r[c('Total Market Value')]));
+  const cars = (P.data.acct || []).filter(r => /vehicle/i.test(r.Subclass || '')).reduce((a, r) => a + (r['Peso Value'] || 0), 0);
+  const order = ['Condo', 'Lot', 'House', ...[...by.keys()].filter(k => !['Condo', 'Lot', 'House'].includes(k))];
+  const segs = order.map((k, i) => ({ k, v: by.get(k) || 0, c: `var(--viz${i + 1})` })).filter(x => x.v || x.k === 'House');
+  segs.push({ k: 'Vehicles', v: cars, c: 'var(--viz5)', attr: 'data-pprop="car"' });
+  segs.forEach(x => { if (x.k !== 'Vehicles' && x.k !== 'House') x.attr = 'data-pprop="overview"'; });
+  return donutCard('Total Value', 'Property Type', segs, php, 'Properties at market value; vehicles at today’s value converted to pesos.', true);
+}
 function renderProps() {
   const d = P.data, tabs = [['overview', 'Overview'], ['shr', 'Shore 3'], ['upt', 'Uptown Modern'], ['ser', 'Sereneo'], ['car', 'Cars']];
   if (!tabs.some(t => t[0] === P.prop)) P.prop = 'overview';
   const title = (tabs.find(t => t[0] === P.prop) || [])[1];
   const body = P.prop === 'overview' ? overviewHTML(d) : P.prop === 'car' ? carHTML(d) : propertyHTML(d[P.prop], title);
-  return `<div class="b-months" role="group" aria-label="Property">${tabs.map(([k, l]) => `<button data-pprop="${k}" class="${P.prop === k ? 'on' : ''}">${l}</button>`).join('')}</div>${body}`;
+  return `${propsDonut(d)}<div class="b-months" role="group" aria-label="Property">${tabs.map(([k, l]) => `<button data-pprop="${k}" class="${P.prop === k ? 'on' : ''}">${l}</button>`).join('')}</div>${body}`;
 }
 
 function renderIns() {
@@ -3282,7 +3387,10 @@ function renderRwd() {
     .sort((a, b) => (+b[c('Peso Value')] || 0) - (+a[c('Peso Value')] || 0));
   const totalAll = avail.reduce((a, r) => a + (+r[c('Peso Value')] || 0), 0);
   const top = [...avail].sort((a, b) => (+b[c('Peso Value')] || 0) - (+a[c('Peso Value')] || 0))[0];
+  const catName = { Miles: 'Airline Miles', Hotel: 'Hotel Points', Rewards: 'Rewards Points', CC: 'Credit Card Points' };
+  const rSegs = types.map((x, i) => ({ k: catName[x] || x, v: avail.filter(r => r[c('Type')] === x).reduce((a, r) => a + (+r[c('Peso Value')] || 0), 0), c: `var(--viz${(i % 6) + 1})`, attr: `data-prtype="${esc(x)}"` }));
   return `
+    ${donutCard('Total Value', 'Category', rSegs, php, 'Peso value of balances. Tap a category to show only its programs.')}
     <div class="b-kpis">
       ${kpi('Total value', php(totalAll))}
       ${kpi('Programs with a balance', fmtN(avail.length), `of ${fmtN(t.rows.length)} memberships`)}
@@ -3483,6 +3591,47 @@ function acRanked(title, note, rows, keyOf, assets, top = 6) {
     return `<div data-tip="${esc(k)}: ${php(v)}, ${pc}% of assets"><div class="t"><span>${esc(k)}</span><b>${php(v)} <small style="color:var(--muted);font-weight:400">${pc}%</small></b></div><div class="b"><i style="width:${v / max * 100}%"></i></div></div>`;
   }).join('')}</div></div>`;
 }
+// Owner only: money in and out each month from the exp sheet, as paired columns, then the chosen month split by source / item
+function acctFlows() {
+  const f = P.data.flows;
+  if (!f || !f.months.length) return '';
+  const n = f.months.length, inc = f.months.map((_, k) => f.inc.reduce((a, r) => a + r.v[k], 0)), out = f.months.map((_, k) => f.out.reduce((a, r) => a + r.v[k], 0));
+  if (!f.months.includes(P.cfMonth)) P.cfMonth = f.months[n - 1];
+  const sel = f.months.indexOf(P.cfMonth), view = P.cfView === 'out' ? 'out' : 'in';
+  const W = 760, H = 230, L = 52, R = 8, T = 12, B = 26, top = Math.max(1, ...inc, ...out);
+  const step = [1, 2, 2.5, 5, 10].map(m => m * 10 ** Math.floor(Math.log10(top / 4))).find(s => top / s <= 5), max = Math.ceil(top / step) * step;
+  const y = v => T + (H - T - B) * (1 - v / max), cw = (W - L - R) / n, bw = Math.min(18, cw * .34);
+  let svg = '';
+  for (let v = 0; v <= max + 1; v += step) svg += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v ? phpM(v) : '0'}</text>`;
+  f.months.forEach((ym, k) => {
+    const cx = L + cw * (k + .5), on = k === sel;
+    if (on) svg += `<rect x="${L + cw * k}" y="${T}" width="${cw}" height="${H - T - B}" fill="var(--chip)"/>`;
+    svg += `<rect x="${cx - bw - 1}" width="${bw}" y="${y(inc[k])}" height="${y(0) - y(inc[k])}" fill="var(--viz3)"/><rect x="${cx + 1}" width="${bw}" y="${y(out[k])}" height="${y(0) - y(out[k])}" fill="var(--accent)"/>`;
+    if (n <= 12 || k % 2 === (n - 1) % 2) svg += `<text x="${cx}" y="${H - 8}" text-anchor="middle">${ymShort(ym)}</text>`;
+    const tip = `${ymLabel(ym)}: in ${php(inc[k])}, out ${php(out[k])}, ${inc[k] >= out[k] ? 'surplus' : 'shortfall'} ${php(Math.abs(inc[k] - out[k]))}`;
+    svg += `<rect x="${L + cw * k}" y="${T}" width="${cw}" height="${H - T - B}" fill="transparent" data-cfm="${ym}" style="cursor:pointer" data-tip="${esc(tip)}" aria-label="${esc(tip)}"/>`;
+  });
+  const sum12 = a => a.slice(-12).reduce((x, v) => x + v, 0), in12 = sum12(inc), out12 = sum12(out);
+  const net = inc[sel] - out[sel];
+  // the chosen month split up: inflows by source, or outflows by item (largest six, the rest as Other)
+  const rows = (view === 'out' ? f.out : f.inc).map(r => ({ k: r.label, v: r.v[sel] })).filter(x => x.v > 0).sort((a, b) => b.v - a.v);
+  const segs = (rows.length > 7 ? [...rows.slice(0, 6), { k: 'Other', v: rows.slice(6).reduce((a, x) => a + x.v, 0) }] : rows).map((x, i) => ({ ...x, c: `var(--viz${(i % 6) + 1})` }));
+  const donut = donutCard(`${view === 'out' ? 'Outflows' : 'Inflows'} in ${ymLabel(P.cfMonth)}:`, view === 'out' ? 'Item' : 'Source', segs, php);
+  return `<div class="b-card">
+    <h3>Inflows and Outflows</h3>
+    <div class="b-kpis sn-pay">
+      ${kpi(`In, ${ymLabel(P.cfMonth)}`, php(inc[sel]))}
+      ${kpi(`Out, ${ymLabel(P.cfMonth)}`, php(out[sel]))}
+      ${kpi(net >= 0 ? 'Surplus' : 'Shortfall', php(Math.abs(net)), ymLabel(P.cfMonth))}
+      ${kpi(`Last ${Math.min(12, n)} Months`, (in12 >= out12 ? '+' : '−') + php(Math.abs(in12 - out12)), `In ${phpM(in12)}, out ${phpM(out12)}`)}
+    </div>
+    <div class="b-scroll"><svg class="nw-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Money in and out by month">${svg}</svg></div>
+    <div class="nw-legend"><span><i style="background:var(--viz3)"></i>In</span><span><i style="background:var(--accent)"></i>Out</span><span class="b-sub">Tap a month to see it below</span></div>
+    <div class="b-months sn-view" role="group" aria-label="Show"><button data-cfview="in" class="${view === 'in' ? 'on' : ''}">Inflows</button><button data-cfview="out" class="${view === 'out' ? 'on' : ''}">Outflows</button></div>
+    ${donut || '<p class="note">Nothing recorded for this month.</p>'}
+    <div class="nw-yn">From the exp sheet. Only you see this.</div>
+  </div>`;
+}
 function renderAcct() {
   const mine = CFG.personalFile.accountsOwner, every = P.data.acct || [];
   const owners = OWNER ? [...new Set(every.map(r => r['Account Owner']))].sort((a, b) => (a === mine ? -1 : b === mine ? 1 : a.localeCompare(b))) : [];
@@ -3516,6 +3665,7 @@ function renderAcct() {
       ${topName ? kpi('Largest holding', esc(topName), `${php(topVal)}, ${Math.round(pctOf(topVal))}% of assets`) : ''}
       ${kpi('Held outside pesos', Math.round(pctOf(sum(foreign))) + '%', php(sum(foreign)))}
     </div>
+    ${OWNER && !P.acOwner || OWNER && P.acOwner === mine ? acctFlows() : ''}
     <div class="b-card"><h3>Assets by class</h3>
       <p class="note" style="margin:0">Excludes debts.</p>
       <div class="ac-stack" role="img" aria-label="${esc(classes.map(([c, v]) => `${c} ${Math.round(pctOf(v))}%`).join(', '))}">${classes.map(([c, v]) => `<button data-acclass="${esc(c)}" class="${P.acClass && P.acClass !== c ? 'dim' : ''}" style="--c:var(--viz${slot(c)});flex:${v} 0 0" data-tip="${esc(c)}: ${php(v)}, ${pctOf(v).toFixed(1)}%" aria-label="${esc(c)}"></button>`).join('')}</div>
@@ -3958,7 +4108,7 @@ function bindPDUI() {
     if (e.target.matches && e.target.querySelector('[data-pill]')) P.illOpen = e.target.open;
   }, true);
   $('#pdBody').addEventListener('click', e => {
-    const a = e.target.closest('[data-pprop],[data-psched],[data-pill],[data-prtype],[data-pinv],[data-phold],[data-pstk],[data-pfnd],[data-acclass],[data-acsort],[data-acowner],[data-snview]'); if (!a) return;
+    const a = e.target.closest('[data-pprop],[data-psched],[data-pill],[data-prtype],[data-pinv],[data-phold],[data-pstk],[data-pfnd],[data-acclass],[data-acsort],[data-acowner],[data-snview],[data-cfm],[data-cfview]'); if (!a) return;
     const y = scrollY;
     if (a.dataset.pinv) { P.inv = a.dataset.pinv; P.hold = ''; renderPD(); return scrollTo(0, 0); }
     if (a.dataset.phold !== undefined) P.hold = a.dataset.phold;
@@ -3972,6 +4122,8 @@ function bindPDUI() {
     if (a.dataset.pill !== undefined) { P.ill = +a.dataset.pill; P.illOpen = true; }
     if (a.dataset.prtype !== undefined) P.rtype = a.dataset.prtype;
     if (a.dataset.snview) P.snView = a.dataset.snview;
+    if (a.dataset.cfm) P.cfMonth = a.dataset.cfm;
+    if (a.dataset.cfview) P.cfView = a.dataset.cfview;
     renderPD(); scrollTo(0, y);
   });
   $('#pdBody').addEventListener('change', e => {
