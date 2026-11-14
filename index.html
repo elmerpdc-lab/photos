@@ -2905,12 +2905,12 @@ function bindBudgetUI() {
    in this page or on GitHub). Read-only: it shows the values Excel last saved. Sections are found by their
    labels, so added rows don't break anything. Downloaded only when the file has changed.
    ===================================================================== */
-const PD_TABS = ['props', 'ins', 'rwd', 'inv', 'acct', 'sndk', 'nwp'], PD_V = 15;   // bump PD_V when parsePD changes, so saved copies are re-read
+const PD_TABS = ['props', 'ins', 'rwd', 'inv', 'acct', 'sndk', 'nwp'], PD_V = 16;   // bump PD_V when parsePD changes, so saved copies are re-read
 const P = { data: null, eTag: '', saved: '', checked: 0, root: null, busy: false, prop: 'overview', sched: 'next', q: '', rtype: '', rall: false, ill: 0, inv: 'usd', hold: '', pstk: '', pfnd: '', acOwner: '', acClass: '', acZero: false, acSort: { k: 'Peso Value', d: -1 }, open: {} };
 // Always owner only, whatever config.js says; family members never receive these sheets
 const OWNER_TABS = ['sndk', 'nwp'];
 const pdAllowed = tab => { const c = CFG.personalFile; return !!c && (OWNER || !(c.ownerOnly || OWNER_TABS.includes(tab) || (c.ownerOnlyTabs || []).includes(tab))) && filesAllowed(); };
-const pdSheets = () => ['real', 'shr', 'upt', 'ser', 'car', 'ins', 'rwd', 'usd', 'php', 'sgd', 'accounts', ...(OWNER ? [...OWNER_TABS, 'exp'] : [])];
+const pdSheets = () => ['real', 'shr', 'upt', 'ser', 'car', 'ins', 'rwd', 'usd', 'php', 'sgd', 'accounts', ...(OWNER ? OWNER_TABS : [])];
 const dayLabel = n => (typeof n === 'number' ? serialDate(n).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '');
 const php = (n, dp = 0) => '₱' + money(n, dp);
 const rm = (n, dp = 0) => 'RM ' + money(n, dp);
@@ -3118,28 +3118,6 @@ function parseNwp(wb) {
   }
   return { ytd, tracker, chartPre, years, phases: iPh >= 0 ? (g[iPh] || []).slice(C, C + n).map(x => (x == null ? '' : String(x))) : [], series, groups, assumptions };
 }
-// exp sheet (owner only): monthly outflows (the "Expenses" block to its Total) and inflows (the rows after it, to
-// "Monthly Total Income"). The USD trading profit row in dollars is skipped; its peso row is used. Months run to this month.
-function parseFlows(wb) {
-  const g = pdGrid(wb, 'exp'), iE = rowOf(g, 0, 'Expenses');
-  if (iE < 0) return null;
-  const head = g[iE] || [], cols = [];
-  const now = new Date(), thisYm = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
-  head.forEach((v, j) => { if (j && typeof v === 'number' && ymOf(v) <= thisYm) cols.push({ j, ym: ymOf(v) }); });
-  const num = v => (typeof v === 'number' ? v : +String(v ?? '').replace(/,/g, '') || 0);
-  const out = [], inc = [];
-  let i = iE + 1;
-  for (; i < g.length; i++) { const l = clean((g[i] || [])[0]); if (l === 'Total') break; if (typeof l === 'string' && l) out.push({ label: l, v: cols.map(c => num(g[i][c.j])) }); }
-  for (i++; i < g.length; i++) {
-    const l = clean((g[i] || [])[0]);
-    if (typeof l === 'string' && /^Monthly Total Income/i.test(l)) break;
-    if (typeof l === 'string' && l && !/\(\$\)/.test(l)) inc.push({ label: l.replace(/\s*\(P\)\s*$/, ''), v: cols.map(c => num(g[i][c.j])) });
-  }
-  // drop months with nothing in them (template columns)
-  const keep = cols.map((_, k) => out.some(r => r.v[k]) || inc.some(r => r.v[k]));
-  const pick = a => a.filter((_, k) => keep[k]);
-  return { months: pick(cols.map(c => c.ym)), out: out.map(r => ({ ...r, v: pick(r.v) })), inc: inc.map(r => ({ ...r, v: pick(r.v) })) };
-}
 function parsePD(wb) {
   const real = pdGrid(wb, 'real');
   const iP = rowOf(real, 0, 'Name'), iT = rowOf(real, 0, 'Name', iP + 1), iR = rowOf(real, 0, 'Pacific Residences Returns');
@@ -3161,7 +3139,7 @@ function parsePD(wb) {
     car: { vehicles: pdTable(car, iV, 0, 13), loan, schedule: iNo >= 0 ? pdTable(car, iL, iNo, 7) : null },
     ins: { policies: pdTable(ins, iPol, 0, 11), payments: pdTable(ins, iPay, 0, 4), ills },
     rwd: pdTable(rw, iW, 0, 12), inv: parseInv(wb), acct: parseAccounts(wb),
-    ...(OWNER ? { sndk: pdTry(parseSndk, wb), nwp: pdTry(parseNwp, wb), flows: pdTry(parseFlows, wb) } : {}) };
+    ...(OWNER ? { sndk: pdTry(parseSndk, wb), nwp: pdTry(parseNwp, wb) } : {}) };
 }
 
 async function loadPD(force = false) {
@@ -3592,46 +3570,6 @@ function acRanked(title, note, rows, keyOf, assets, top = 6) {
   }).join('')}</div></div>`;
 }
 // Owner only: money in and out each month from the exp sheet, as paired columns, then the chosen month split by source / item
-function acctFlows() {
-  const f = P.data.flows;
-  if (!f || !f.months.length) return '';
-  const n = f.months.length, inc = f.months.map((_, k) => f.inc.reduce((a, r) => a + r.v[k], 0)), out = f.months.map((_, k) => f.out.reduce((a, r) => a + r.v[k], 0));
-  if (!f.months.includes(P.cfMonth)) P.cfMonth = f.months[n - 1];
-  const sel = f.months.indexOf(P.cfMonth), view = P.cfView === 'out' ? 'out' : 'in';
-  const W = 760, H = 230, L = 52, R = 8, T = 12, B = 26, top = Math.max(1, ...inc, ...out);
-  const step = [1, 2, 2.5, 5, 10].map(m => m * 10 ** Math.floor(Math.log10(top / 4))).find(s => top / s <= 5), max = Math.ceil(top / step) * step;
-  const y = v => T + (H - T - B) * (1 - v / max), cw = (W - L - R) / n, bw = Math.min(18, cw * .34);
-  let svg = '';
-  for (let v = 0; v <= max + 1; v += step) svg += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v ? phpM(v) : '0'}</text>`;
-  f.months.forEach((ym, k) => {
-    const cx = L + cw * (k + .5), on = k === sel;
-    if (on) svg += `<rect x="${L + cw * k}" y="${T}" width="${cw}" height="${H - T - B}" fill="var(--chip)"/>`;
-    svg += `<rect x="${cx - bw - 1}" width="${bw}" y="${y(inc[k])}" height="${y(0) - y(inc[k])}" fill="var(--viz3)"/><rect x="${cx + 1}" width="${bw}" y="${y(out[k])}" height="${y(0) - y(out[k])}" fill="var(--accent)"/>`;
-    if (n <= 12 || k % 2 === (n - 1) % 2) svg += `<text x="${cx}" y="${H - 8}" text-anchor="middle">${ymShort(ym)}</text>`;
-    const tip = `${ymLabel(ym)}: in ${php(inc[k])}, out ${php(out[k])}, ${inc[k] >= out[k] ? 'surplus' : 'shortfall'} ${php(Math.abs(inc[k] - out[k]))}`;
-    svg += `<rect x="${L + cw * k}" y="${T}" width="${cw}" height="${H - T - B}" fill="transparent" data-cfm="${ym}" style="cursor:pointer" data-tip="${esc(tip)}" aria-label="${esc(tip)}"/>`;
-  });
-  const sum12 = a => a.slice(-12).reduce((x, v) => x + v, 0), in12 = sum12(inc), out12 = sum12(out);
-  const net = inc[sel] - out[sel];
-  // the chosen month split up: inflows by source, or outflows by item (largest six, the rest as Other)
-  const rows = (view === 'out' ? f.out : f.inc).map(r => ({ k: r.label, v: r.v[sel] })).filter(x => x.v > 0).sort((a, b) => b.v - a.v);
-  const segs = (rows.length > 7 ? [...rows.slice(0, 6), { k: 'Other', v: rows.slice(6).reduce((a, x) => a + x.v, 0) }] : rows).map((x, i) => ({ ...x, c: `var(--viz${(i % 6) + 1})` }));
-  const donut = donutCard(`${view === 'out' ? 'Outflows' : 'Inflows'} in ${ymLabel(P.cfMonth)}:`, view === 'out' ? 'Item' : 'Source', segs, php);
-  return `<div class="b-card">
-    <h3>Inflows and Outflows</h3>
-    <div class="b-kpis sn-pay">
-      ${kpi(`In, ${ymLabel(P.cfMonth)}`, php(inc[sel]))}
-      ${kpi(`Out, ${ymLabel(P.cfMonth)}`, php(out[sel]))}
-      ${kpi(net >= 0 ? 'Surplus' : 'Shortfall', php(Math.abs(net)), ymLabel(P.cfMonth))}
-      ${kpi(`Last ${Math.min(12, n)} Months`, (in12 >= out12 ? '+' : '−') + php(Math.abs(in12 - out12)), `In ${phpM(in12)}, out ${phpM(out12)}`)}
-    </div>
-    <div class="b-scroll"><svg class="nw-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Money in and out by month">${svg}</svg></div>
-    <div class="nw-legend"><span><i style="background:var(--viz3)"></i>In</span><span><i style="background:var(--accent)"></i>Out</span><span class="b-sub">Tap a month to see it below</span></div>
-    <div class="b-months sn-view" role="group" aria-label="Show"><button data-cfview="in" class="${view === 'in' ? 'on' : ''}">Inflows</button><button data-cfview="out" class="${view === 'out' ? 'on' : ''}">Outflows</button></div>
-    ${donut || '<p class="note">Nothing recorded for this month.</p>'}
-    <div class="nw-yn">From the exp sheet. Only you see this.</div>
-  </div>`;
-}
 function renderAcct() {
   const mine = CFG.personalFile.accountsOwner, every = P.data.acct || [];
   const owners = OWNER ? [...new Set(every.map(r => r['Account Owner']))].sort((a, b) => (a === mine ? -1 : b === mine ? 1 : a.localeCompare(b))) : [];
@@ -3665,7 +3603,6 @@ function renderAcct() {
       ${topName ? kpi('Largest holding', esc(topName), `${php(topVal)}, ${Math.round(pctOf(topVal))}% of assets`) : ''}
       ${kpi('Held outside pesos', Math.round(pctOf(sum(foreign))) + '%', php(sum(foreign)))}
     </div>
-    ${OWNER && !P.acOwner || OWNER && P.acOwner === mine ? acctFlows() : ''}
     <div class="b-card"><h3>Assets by class</h3>
       <p class="note" style="margin:0">Excludes debts.</p>
       <div class="ac-stack" role="img" aria-label="${esc(classes.map(([c, v]) => `${c} ${Math.round(pctOf(v))}%`).join(', '))}">${classes.map(([c, v]) => `<button data-acclass="${esc(c)}" class="${P.acClass && P.acClass !== c ? 'dim' : ''}" style="--c:var(--viz${slot(c)});flex:${v} 0 0" data-tip="${esc(c)}: ${php(v)}, ${pctOf(v).toFixed(1)}%" aria-label="${esc(c)}"></button>`).join('')}</div>
@@ -4108,7 +4045,7 @@ function bindPDUI() {
     if (e.target.matches && e.target.querySelector('[data-pill]')) P.illOpen = e.target.open;
   }, true);
   $('#pdBody').addEventListener('click', e => {
-    const a = e.target.closest('[data-pprop],[data-psched],[data-pill],[data-prtype],[data-pinv],[data-phold],[data-pstk],[data-pfnd],[data-acclass],[data-acsort],[data-acowner],[data-snview],[data-cfm],[data-cfview]'); if (!a) return;
+    const a = e.target.closest('[data-pprop],[data-psched],[data-pill],[data-prtype],[data-pinv],[data-phold],[data-pstk],[data-pfnd],[data-acclass],[data-acsort],[data-acowner],[data-snview]'); if (!a) return;
     const y = scrollY;
     if (a.dataset.pinv) { P.inv = a.dataset.pinv; P.hold = ''; renderPD(); return scrollTo(0, 0); }
     if (a.dataset.phold !== undefined) P.hold = a.dataset.phold;
@@ -4122,8 +4059,6 @@ function bindPDUI() {
     if (a.dataset.pill !== undefined) { P.ill = +a.dataset.pill; P.illOpen = true; }
     if (a.dataset.prtype !== undefined) P.rtype = a.dataset.prtype;
     if (a.dataset.snview) P.snView = a.dataset.snview;
-    if (a.dataset.cfm) P.cfMonth = a.dataset.cfm;
-    if (a.dataset.cfview) P.cfView = a.dataset.cfview;
     renderPD(); scrollTo(0, y);
   });
   $('#pdBody').addEventListener('change', e => {
