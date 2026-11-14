@@ -262,6 +262,8 @@ body.building #photosLayout > aside, body.building #photosLayout > main > :not(#
 .sn-donut { width: 180px; height: 180px; }
 .sn-sw { display: inline-block; width: 4px; height: 16px; border-radius: 2px; margin-right: 8px; vertical-align: -3px; }
 .sn-help { color: var(--muted); cursor: help; }
+.b-t tr.iv-row { cursor: pointer; }
+.b-t tr.iv-row:hover td { background: var(--chip); }
 @media (max-width: 860px) { .sn-hold-body { grid-template-columns: 1fr; gap: 10px; } .sn-donut { width: 140px; height: 140px; margin: 0 auto; } }
 .sn-hold .b-t td:first-child { white-space: nowrap; }
 .nw-ytd h3 { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -3574,10 +3576,56 @@ function invMY() {
     ${proj.length ? invMore('my-proj', 'Projected EPF Balance', `<div class="b-scroll"><table class="b-t"><thead><tr><th>Year</th><th class="r">MYR</th><th class="r">Pesos</th></tr></thead><tbody>${proj.map(r => `<tr class="${r.retire ? 'pd-next' : ''}"><td>${r.Year}${r.retire ? ' (retire)' : ''}</td><td class="r">${r.MYR == null ? '' : rm(r.MYR)}</td><td class="r">${phpM(r.PHP)}</td></tr>`).join('')}</tbody></table></div>
       <div class="nw-yn">Year-end, from the Net Worth plan; MYR at the plan's MYR/PHP rate. Only you see this.</div>`) : ''}`;
 }
+// Investments across countries, in US dollars, as a donut like the Sandisk holdings summary. Each slice is the net liquidity its
+// sub-tab shows (in your view including Ellie's and Evan's accounts), converted at the Accounts sheet's own exchange rates.
+function invOverview(d) {
+  const mine = CFG.personalFile.accountsOwner, acct = P.data.acct || [];
+  const fxOf = cur => { const r = acct.filter(x => x.Currency === cur && Math.abs(x['Current Amount']) >= 0.5 && x['Peso Value']); const c = r.reduce((a, x) => a + x['Current Amount'], 0); return c ? r.reduce((a, x) => a + x['Peso Value'], 0) / c : null; };
+  const sumA = l => l.reduce((x, r) => x + (r['Current Amount'] || 0), 0);
+  // US / Global: IBKR net liquidity, plus other people's IBKR totals in your view (as on that sub-tab)
+  const usOthers = OWNER ? acct.filter(r => r['Account Owner'] !== mine && /^IBKR/i.test(r.Institution || '') && r.Currency === 'USD' && Math.abs(r['Current Amount']) >= 0.5) : [];
+  const us = ((d.usd && d.usd.accounts.total && d.usd.accounts.total['Net Liquidity']) || 0) + sumA(usOthers);
+  const pf = phFunds(), ph = ((d.php && d.php.accounts.total && d.php.accounts.total['Net Liquidity']) || 0) + sumA(pf.mp2) + sumA(pf.ret);
+  const sg = (d.sgd && d.sgd.accounts.total && d.sgd.accounts.total['Net Liquidity']) || 0;
+  const epf = acct.filter(r => /\b(EPF|KWSP)\b/i.test(`${r.Institution || ''} ${r['Account Type'] || ''}`) && (!mine || r['Account Owner'] === mine)), my = sumA(epf);
+  const fx = { USD: fxOf('USD'), SGD: fxOf('SGD'), MYR: fxOf('MYR') };
+  const segs = [
+    { k: 'US / Global', tab: 'usd', cur: 'USD', loc: us, f: usdFmt, v: fx.USD ? us * fx.USD : null, c: 'var(--viz1)' },
+    { k: 'Philippines', tab: 'php', cur: 'PHP', loc: ph, f: phpFmt, v: ph, c: 'var(--viz2)' },
+    { k: 'Singapore', tab: 'sgd', cur: 'SGD', loc: sg, f: sgdFmt, v: fx.SGD ? sg * fx.SGD : null, c: 'var(--viz3)' },
+    { k: 'Malaysia', tab: 'my', cur: 'MYR', loc: my, f: (n, dp = 0) => (n < 0 ? '−RM' : 'RM') + money(Math.abs(n), dp), v: epf.reduce((x, r) => x + (r['Peso Value'] || 0), 0), c: 'var(--viz4)' },
+  ].filter(x => x.v != null && Math.abs(x.v) >= 0.5);
+  // Shown in US dollars: pesos converted back at the USD rate
+  if (!fx.USD) return '';
+  segs.forEach(x => { x.v /= fx.USD; });
+  const total = segs.reduce((x, s) => x + Math.max(0, s.v), 0);
+  if (!total) return '';
+  const R = 70, C = 2 * Math.PI * R;
+  let at = 0, ring = `<circle cx="90" cy="90" r="${R}" fill="none" stroke="var(--chip)" stroke-width="22"/>`;
+  for (const x of segs) {
+    if (!(x.v > 0)) continue;
+    const len = x.v / total * C;
+    ring += `<circle cx="90" cy="90" r="${R}" fill="none" stroke="${x.c}" stroke-width="22" stroke-dasharray="${len} ${C - len}" stroke-dashoffset="${-at}" transform="rotate(-90 90 90)" data-pinv="${x.tab}" style="cursor:pointer"><title>${esc(x.k)} ${usdFmt(x.v)}</title></circle>`;
+    at += len;
+  }
+  const pc = v => (v / total * 100).toFixed(2) + '%';
+  return `<div class="b-card sn-hold">
+    <h3>Total Value ${usdFmt(total)}</h3>
+    <div class="sn-hold-body">
+      <svg class="sn-donut" viewBox="0 0 180 180" role="img" aria-label="Investments by country">${ring}</svg>
+      <div class="b-scroll"><table class="b-t"><thead><tr><th>Country</th><th class="r">Allocation</th><th class="r b-hide-m">Local Value</th><th class="r">Value (USD)</th></tr></thead><tbody>
+        ${segs.map(x => `<tr class="iv-row" data-pinv="${x.tab}"><td><i class="sn-sw" style="background:${x.c}"></i>${esc(x.k)}</td><td class="r">${pc(Math.max(0, x.v))}</td><td class="r b-hide-m">${x.cur === 'USD' ? '' : x.f(x.loc)}</td><td class="r">${usdFmt(x.v)}</td></tr>`).join('')}
+        <tr class="tot"><td>Total</td><td class="r">100.00%</td><td class="b-hide-m"></td><td class="r">${usdFmt(total)}</td></tr>
+      </tbody></table></div>
+    </div>
+    <div class="nw-yn">${usOthers.length || [...pf.mp2, ...pf.ret].some(r => r['Account Owner'] !== mine) ? `Includes ${[...new Set([...usOthers, ...pf.mp2, ...pf.ret].map(r => r['Account Owner']).filter(o => o && o !== mine))].map(esc).join(' and ')}'s accounts. ` : ''}Converted to US dollars at the Accounts sheet's exchange rates. Tap a country to open it.</div>
+  </div>`;
+}
 function renderInv() {
   const tabs = [['usd', 'US / Global'], ['php', 'Philippines'], ['sgd', 'Singapore'], ['my', 'Malaysia']], d = P.data.inv;
   if (!tabs.some(t => t[0] === P.inv)) P.inv = 'usd';
-  return `    <div class="b-months" role="group" aria-label="Portfolio">${tabs.map(([k, l]) => `<button data-pinv="${k}" class="${P.inv === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+  return `    ${invOverview(d)}
+    <div class="b-months" role="group" aria-label="Portfolio">${tabs.map(([k, l]) => `<button data-pinv="${k}" class="${P.inv === k ? 'on' : ''}">${l}</button>`).join('')}</div>
     ${P.inv === 'usd' ? invUSD(d.usd) : P.inv === 'php' ? invPHP(d.php) : P.inv === 'my' ? invMY() : invSGD(d.sgd)}`;
 }
 
